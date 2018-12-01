@@ -52,56 +52,5 @@ intel-fpga-pac-iopll-y := drivers/fpga/intel/intel-fpga-pac-iopll.o
 all:
 	$(MAKE) -C $(KERNELDIR) M=$(PWD) modules
 
-install-drv:
-	cp 40-intel-fpga.rules /etc/udev/rules.d
-	$(MAKE) -C $(KERNELDIR) M=$(PWD) modules_install
-	depmod
-	modprobe spi-nor-mod
-	modprobe altera-asmip2
-	modprobe avmmi-bmc
-	modprobe fpga-mgr-mod
-	modprobe intel-fpga-pci
-	modprobe intel-fpga-afu
-	modprobe intel-fpga-fme
-	modprobe intel-fpga-pac-hssi
-	modprobe intel-fpga-pac-iopll
-
-install-src:
-	mkdir -p $(DESTDIR)/usr/src/intel-fpga-1.2.0-1/
-	mkdir -p $(DESTDIR)/usr/src/intel-fpga-1.2.0-1/include/intel
-	mkdir -p $(DESTDIR)/usr/src/intel-fpga-1.2.0-1/include/linux/fpga
-	mkdir -p $(DESTDIR)/usr/src/intel-fpga-1.2.0-1/include/linux/mtd
-	mkdir -p $(DESTDIR)/usr/src/intel-fpga-1.2.0-1/include/uapi/linux
-	mkdir -p $(DESTDIR)/usr/src/intel-fpga-1.2.0-1/drivers/fpga/intel
-	mkdir -p $(DESTDIR)/usr/src/intel-fpga-1.2.0-1/drivers/misc
-	mkdir -p $(DESTDIR)/usr/src/intel-fpga-1.2.0-1/drivers/mtd/spi-nor
-
-	cp -f include/*.h $(DESTDIR)/usr/src/intel-fpga-1.2.0-1/include/
-	cp -f include/intel/*.h $(DESTDIR)/usr/src/intel-fpga-1.2.0-1/include/intel/
-	cp -f include/linux/fpga/*.h $(DESTDIR)/usr/src/intel-fpga-1.2.0-1/include/linux/fpga/
-	cp -f include/linux/mtd/spi-nor-mod.h $(DESTDIR)/usr/src/intel-fpga-1.2.0-1/include/linux/mtd/
-	cp -f include/linux/iopoll-mod.h $(DESTDIR)/usr/src/intel-fpga-1.2.0-1/include/linux
-	cp -f include/linux/mtd/altera-asmip2.h $(DESTDIR)/usr/src/intel-fpga-1.2.0-1/include/linux/mtd/
-	cp -f include/linux/avmmi-bmc.h $(DESTDIR)/usr/src/intel-fpga-1.2.0-1/include/linux/
-	cp -f include/uapi/linux/*.h $(DESTDIR)/usr/src/intel-fpga-1.2.0-1/include/uapi/linux/
-
-	cp -f drivers/misc/avmmi-bmc.c $(DESTDIR)/usr/src/intel-fpga-1.2.0-1/drivers/misc/
-	cp -f drivers/mtd/spi-nor/spi-nor.c $(DESTDIR)/usr/src/intel-fpga-1.2.0-1/drivers/mtd/spi-nor
-	cp -f drivers/mtd/spi-nor/altera-asmip2.c $(DESTDIR)/usr/src/intel-fpga-1.2.0-1/drivers/mtd/spi-nor
-	cp -f drivers/fpga/*.c $(DESTDIR)/usr/src/intel-fpga-1.2.0-1/drivers/fpga/
-	cp -f drivers/fpga/intel/*.[ch] $(DESTDIR)/usr/src/intel-fpga-1.2.0-1/drivers/fpga/intel/
-
-	cp -f Makefile $(DESTDIR)/usr/src/intel-fpga-1.2.0-1/
-
-	cp -f *.sh $(DESTDIR)/usr/src/intel-fpga-1.2.0-1/
-	cp -f dkms.conf $(DESTDIR)/usr/src/intel-fpga-1.2.0-1/
-
-	cp -f *.rules $(DESTDIR)/usr/src/intel-fpga-1.2.0-1/
-
-install : install-src
-	dkms add -m intel-fpga -v 1.2.0-1
-	dkms build -m intel-fpga -v 1.2.0-1
-	dkms install -m intel-fpga -v 1.2.0-1
-
 clean:
 	$(MAKE) -C $(KERNELDIR) M=$(PWD) clean
