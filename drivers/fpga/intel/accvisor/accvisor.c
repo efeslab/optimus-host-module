@@ -1160,16 +1160,37 @@ static const struct file_operations vd_fops = {
 
 /* physical device hook */
 
+static struct accvisor* device_to_accvisor(struct device *pafu)
+{
+    struct accvisor *d, *tmp_d;
+    struct accvisor *ret = NULL;
+
+    mutex_lock(&accvisor_list_lock);
+    list_for_each_entry_safe(d, tmp_d, &accvisor_list, next) {
+        if (d->pafu_device == pafu) {
+            printk("accvisor: %s found accvisor\n", __func__);
+            ret = d;
+            break;
+        }
+    }
+    mutex_unlock(&accvisor_list_lock);
+
+    return ret;
+}
+
 static ssize_t
-accvisor_show(struct device *dev,
+info_show(struct device *dev,
             struct device_attribute *attr, char *buf)
 {
-    return sprintf(buf, "This is a physical FPGA\n");
+    struct accvisor *accvisor = device_to_accvisor(dev);
+
+    return sprintf(buf, "This is a physical FPGA with %d accelerators.\n",
+                        accvisor->num_phys_accels);
 }
-static DEVICE_ATTR_RO(accvisor);
+static DEVICE_ATTR_RO(info);
 
 static struct attribute *accvisor_attrs[] = {
-    &dev_attr_accvisor.attr,
+    &dev_attr_info.attr,
     NULL,
 };
 
@@ -1460,8 +1481,8 @@ int fpga_register_afu_mdev_device(struct platform_device *pdev)
 	scnprintf(buf, PAGE_SIZE, "%016llx%016llx", guidh, guidl);
     printk("accvisor: %s, phy afu id %s\n", __func__, buf);
 
-    if (guidl != ACCVISOR_GUID_HI ||
-            guidh != ACCVISOR_GUID_LO) {
+    if (guidh != ACCVISOR_GUID_HI ||
+            guidl != ACCVISOR_GUID_LO) {
         printk("accvisor: not accvisor hardware\n");
         return -EINVAL;
     }
@@ -1514,6 +1535,9 @@ void fpga_unregister_afu_mdev_device(struct platform_device *pdev)
 {
     struct accvisor *d, *tmp_d;
     struct accvisor *accvisor = pdev_to_accvisor(pdev);
+
+    if (!accvisor)
+        return;
 
     accvisor_iommu_uinit(accvisor, pdev);
 
