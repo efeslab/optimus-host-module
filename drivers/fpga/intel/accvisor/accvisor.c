@@ -37,6 +37,8 @@
 
 #define ACCVISOR_NAME        "accvisor"
 
+#define CL(x) ((x)*64)
+
 #define ACCVISOR_STRING_LEN		64
 
 #define ACCVISOR_CONFIG_SPACE_SIZE  0xff
@@ -71,6 +73,8 @@ struct accvisor {
     struct iommu_domain *domain;
     int iommu_map_flags;
 
+    struct mutex reset_lock;
+
     u32 global_seq_id;
     u32 num_phys_accels;
     struct phys_accel_entry *phys_accels;
@@ -99,6 +103,7 @@ struct phys_accel_entry {
     vaccel_mode_t mode;
     u32 mode_id;
 
+    u32 accel_id;
     u32 mmio_start;
     u32 mmio_size;
 
@@ -635,9 +640,34 @@ static void handle_bar_write(unsigned int index, struct vaccel *vaccel,
         }
         case 0x10: /* MEM_BASE */
         {
+            u64 mux_offset;
+            u64 vm_cfg_offset;
+
             data64 = *(u64*)buf;
             STORE_LE64(&vaccel->bar[VACCEL_BAR_2][offset], data64);
             vaccel->gva_start = data64;
+
+            mux_offset = vaccel->iova_start/CL(1) -
+                    vaccel->gva_start/CL(1);
+            vm_cfg_offset = vaccel->phys_accel_entry->accel_id * 8 + 0x30;
+
+            writeq(mux_offset, &vaccel->accvisor->pafu_mmio[vm_cfg_offset]);
+
+            break;
+        }
+        case 0x18: /* RESET */
+        {
+            u64 reset_flags;
+            u64 new_reset_flags;
+
+            mutex_lock(&vaccel->accvisor->reset_lock);
+            reset_flags = readq(&vaccel->accvisor->pafu_mmio[0x18]);
+            new_reset_flags = reset_flags |
+                    (1 << vaccel->phys_accel_entry->accel_id);
+            writeq(new_reset_flags, &vaccel->accvisor->pafu_mmio[0x18]);
+            writeq(reset_flags, &vaccel->accvisor->pafu_mmio[0x18]);
+            mutex_unlock(&vaccel->accvisor->reset_lock);
+
             break;
         }
         default:
@@ -1335,15 +1365,17 @@ static int accvisor_probe(struct accvisor *accvisor, u32 *ndirect, u32 *nts)
     /* TODO: base on real hardware */
 
     int i;
+    int num_phys_accels = readq(&accvisor->pafu_mmio[0x20]);
 
-    accvisor->num_phys_accels = 3;
+    accvisor->num_phys_accels = num_phys_accels;
     accvisor->phys_accels =
             kzalloc(sizeof(struct phys_accel_entry)*3, GFP_KERNEL);
 
-    for (i=0; i<3; i++) {
+    for (i=0; i<num_phys_accels; i++) {
         /* TODO: match the magic */
         accvisor->phys_accels[i].mode = VACCEL_TYPE_DIRECT;
         accvisor->phys_accels[i].mode_id = i;
+        accvisor->phys_accels[i].accel_id = i;
         accvisor->phys_accels[i].mmio_start = 0x100*(i+1);
         accvisor->phys_accels[i].mmio_size = 0x100;
 
@@ -1438,6 +1470,7 @@ int fpga_register_afu_mdev_device(struct platform_device *pdev)
     accvisor->pafu_device = pafu;
     accvisor->pafu_mmio = (u8 *)hdr;
     mutex_init(&accvisor->vaccel_list_lock);
+    mutex_init(&accvisor->reset_lock);
     INIT_LIST_HEAD(&accvisor->vaccel_devices_list);
     accvisor->global_seq_id = 0;
     
