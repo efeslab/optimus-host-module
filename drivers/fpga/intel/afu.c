@@ -1225,11 +1225,7 @@ static int afu_probe(struct platform_device *pdev)
 		goto dev_destroy;
 	}
 
-    ret = fpga_register_afu_mdev_device(pdev);
-    if (ret) {
-        fpga_dev_feature_uinit(pdev);
-        goto dev_destroy;
-    }
+    fpga_register_afu_mdev_device(pdev);
 
 	return 0;
 
