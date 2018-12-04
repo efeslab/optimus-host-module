@@ -76,6 +76,9 @@ int port_err_test(struct platform_device *pdev, struct feature *feature);
 int port_umsg_test(struct platform_device *pdev, struct feature *feature);
 int port_stp_test(struct platform_device *pdev, struct feature *feature);
 
+int fpga_register_afu_mdev_device(struct platform_device *pdev);
+void fpga_unregister_afu_mdev_device(struct platform_device *pdev);
+
 extern struct feature_ops port_err_ops;
 
 #endif

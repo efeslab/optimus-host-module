@@ -1,0 +1,10 @@
+#ifndef _VAI_INTERNAL_H_
+#define _VAI_INTERNAL_H_
+
+#define VAI_REG_PAGE_TABLE_ROOT 0x0
+#define VAI_REG_JOB_RING_HEAD 0x4
+#define VAI_REG_JOB_RING_TAIL 0x8
+#define VAI_REG_JOB_RING_ENTRY 0xc
+#define VAI_REG_JOB_RING_SIZE 0x10
+
+#endif /* _VAI_INTERNAL_H_ */
