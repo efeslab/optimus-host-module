@@ -1400,6 +1400,9 @@ static int accvisor_probe(struct accvisor *accvisor, u32 *ndirect, u32 *nts)
         accvisor->phys_accels[i].mmio_start = 0x100*(i+1);
         accvisor->phys_accels[i].mmio_size = 0x100;
 
+        accvisor->phys_accels[i].available_instances = 1;
+        accvisor->phys_accels[i].current_instance = 0;
+
         mutex_init(&accvisor->phys_accels[i].instance_lock);
         INIT_LIST_HEAD(&accvisor->phys_accels[i].vaccel_list);
     }
