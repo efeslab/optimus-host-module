@@ -986,6 +986,8 @@ static int vaccel_reset(struct mdev_device *mdev)
     vaccel->paging_notifier_gpa = -1;
     vaccel->kvm = NULL;
 
+    vaccel_open(mdev);
+
     return 0;
 }
 

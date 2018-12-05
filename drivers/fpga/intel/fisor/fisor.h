@@ -20,7 +20,6 @@
 #include <linux/mdev.h>
 #include <linux/pci.h>
 #include <linux/serial.h>
-#include <uapi/linux/serial_reg.h>
 #include <linux/eventfd.h>
 #include <linux/kvm_host.h>
 #include <linux/list.h>
