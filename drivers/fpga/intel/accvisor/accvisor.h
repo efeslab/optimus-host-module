@@ -60,7 +60,7 @@
 #define ACCVISOR_VFIO_PCI_OFFSET_MASK    \
 				(((u64)(1) << ACCVISOR_VFIO_PCI_OFFSET_SHIFT) - 1)
 
-struct phys_accel_entry;
+struct paccel;
 
 struct accvisor {
     struct device *pafu_device;
@@ -75,18 +75,26 @@ struct accvisor {
 
     struct mutex reset_lock;
 
+    struct task_struct *worker_kthread;
+
     u32 global_seq_id;
-    u32 num_phys_accels;
-    struct phys_accel_entry *phys_accels;
+    u32 npaccels;
+    struct paccel *paccels;
 };
 
 extern struct mutex accvisor_list_lock;
 extern struct list_head accvisor_list;
 
+#define SIZE_64G (64*1024*1024*1024LLU)
+
 #define ACCVISOR_BAR_0_SIZE 0x100
 #define ACCVISOR_BAR_2_SIZE 0x100
 #define ACCVISOR_BAR_0_MASK ~(ACCVISOR_BAR_0_SIZE - 1)
 #define ACCVISOR_BAR_2_MASK ~(ACCVISOR_BAR_2_SIZE - 1)
+
+#define ACCVISOR_GUID_HI 0xd1d383aaca4c4c60
+#define ACCVISOR_GUID_LO 0xa0a013a421139e69
+#define ACCVISOR_MAGIC 0xfffff
 
 enum {
     VACCEL_BAR_0,
@@ -99,7 +107,7 @@ typedef enum {
     VACCEL_TYPE_TIME_SLICING
 } vaccel_mode_t;
 
-struct phys_accel_entry {
+struct paccel {
     vaccel_mode_t mode;
     u32 mode_id;
 
@@ -135,12 +143,20 @@ struct vaccel {
     struct notifier_block group_notifier;
 
     struct accvisor *accvisor;
-    struct phys_accel_entry *phys_accel_entry;
+    struct paccel *paccel;
 };
 
 struct vaccel_paging_notifier {
     uint64_t va;
     uint64_t pa;
+};
+
+struct vaccel_ops {
+    char *name;
+    vaccel_mode_t mode;
+
+    int (*handle_bar_read)(unsigned int, struct vaccel *, u16, char *, u32);
+    int (*handle_bar_write)(unsigned int, struct vaccel *, u16, char *, u32);
 };
 
 #endif /* _VAI_INTERNAL_H_ */

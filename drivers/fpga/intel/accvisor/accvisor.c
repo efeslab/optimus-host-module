@@ -4,9 +4,9 @@
 DEFINE_MUTEX(accvisor_list_lock);
 struct list_head accvisor_list = LIST_HEAD_INIT(accvisor_list);
 
-static void dump_phys_accels(struct accvisor *accvisor)
+static void dump_paccels(struct accvisor *accvisor)
 {
-    struct phys_accel_entry *phys_accels;
+    struct paccel *paccels;
     int i;
 
     if (!accvisor) {
@@ -14,14 +14,14 @@ static void dump_phys_accels(struct accvisor *accvisor)
         return;
     }
     
-    phys_accels = accvisor->phys_accels;
-    if (!phys_accels) {
-        printk("accvisor: phys_accels empty\n");
+    paccels = accvisor->paccels;
+    if (!paccels) {
+        printk("accvisor: paccels empty\n");
         return;
     }
 
-    for (i=0; i<accvisor->num_phys_accels; i++) {
-        struct phys_accel_entry *entry = &accvisor->phys_accels[i];
+    for (i=0; i<accvisor->npaccels; i++) {
+        struct paccel *entry = &accvisor->paccels[i];
         u32 accel_id = entry->accel_id;
         u32 mmio_start = entry->mmio_start;
         u32 mmio_size = entry->mmio_size;
@@ -82,33 +82,33 @@ static void vaccel_create_config_space(struct vaccel *vaccel)
 	vaccel->vconfig[0x3d] = 0x01;   /* interrupt pin (INTA#) */
 }
 
-static struct phys_accel_entry* kobj_to_entry(struct kobject *kobj,
+static struct paccel* kobj_to_entry(struct kobject *kobj,
             struct accvisor *accvisor, struct mdev_device *mdev,
             vaccel_mode_t *mode, u32 *mode_id)
 {
     char name[ACCVISOR_STRING_LEN];
-    struct phys_accel_entry *entry = NULL;
+    struct paccel *entry = NULL;
     int i;
 
-    for (i=0; i<accvisor->num_phys_accels; i++) {
+    for (i=0; i<accvisor->npaccels; i++) {
 
-        if (accvisor->phys_accels[i].mode == VACCEL_TYPE_DIRECT) {
+        if (accvisor->paccels[i].mode == VACCEL_TYPE_DIRECT) {
             snprintf(name, ACCVISOR_STRING_LEN, "%s-direct-%d",
                         dev_driver_string(mdev_parent_dev(mdev)),
-                        accvisor->phys_accels[i].mode_id);
+                        accvisor->paccels[i].mode_id);
         }
         else {
             snprintf(name, ACCVISOR_STRING_LEN, "%s-time_slicing-%d",
                         dev_driver_string(mdev_parent_dev(mdev)),
-                        accvisor->phys_accels[i].mode_id);
+                        accvisor->paccels[i].mode_id);
         }
 
         printk("accvisor: scan %s\n", name);
 
         if (!strcmp(kobj->name, name)) {
-            *mode = accvisor->phys_accels[i].mode;
-            *mode_id = accvisor->phys_accels[i].mode_id;
-            entry = &accvisor->phys_accels[i];
+            *mode = accvisor->paccels[i].mode;
+            *mode_id = accvisor->paccels[i].mode_id;
+            entry = &accvisor->paccels[i];
             return entry;
         }
     }
@@ -137,15 +137,13 @@ static struct accvisor* mdev_to_accvisor(struct mdev_device *mdev)
     return ret;
 }
 
-#define SIZE_64G (64*1024*1024*1024LLU)
-
 int vaccel_create(struct kobject *kobj, struct mdev_device *mdev)
 {
     struct vaccel *vaccel;
     struct accvisor *accvisor;
     vaccel_mode_t mode;
     u32 mode_id = -1;
-    struct phys_accel_entry *entry;
+    struct paccel *entry;
 
     printk("accvisor: %s\n", __func__);
 
@@ -172,7 +170,7 @@ int vaccel_create(struct kobject *kobj, struct mdev_device *mdev)
     }
 
     vaccel->mode = mode;
-    vaccel->phys_accel_entry = entry;
+    vaccel->paccel = entry;
 
     vaccel->vconfig = kzalloc(ACCVISOR_CONFIG_SPACE_SIZE, GFP_KERNEL);
     vaccel->bar[VACCEL_BAR_0] = kzalloc(ACCVISOR_BAR_0_SIZE, GFP_KERNEL);
@@ -198,7 +196,7 @@ int vaccel_create(struct kobject *kobj, struct mdev_device *mdev)
     list_add(&vaccel->next, &accvisor->vaccel_devices_list);
     mutex_unlock(&accvisor->vaccel_list_lock);
 
-    /* if time_slicing, add to phys_accel_entry->vaccel_list */
+    /* if time_slicing, add to paccel->vaccel_list */
     if (vaccel->mode == VACCEL_TYPE_TIME_SLICING) {
         mutex_lock(&entry->instance_lock);
         entry->current_instance++;
@@ -209,10 +207,10 @@ int vaccel_create(struct kobject *kobj, struct mdev_device *mdev)
     printk("accvisor: vaccel created. seq_id %x, mode %s, mode_id %d, gva_start %llx\n",
                     vaccel->seq_id,
                     vaccel->mode==VACCEL_TYPE_DIRECT?"direct":"timeslicing",
-                    vaccel->phys_accel_entry->mode_id,
+                    vaccel->paccel->mode_id,
                     vaccel->gva_start);
 
-    dump_phys_accels(accvisor);
+    dump_paccels(accvisor);
 
     return 0;
 }
@@ -222,7 +220,7 @@ int vaccel_remove(struct mdev_device *mdev)
     struct vaccel *mds, *tmp_mds;
     struct vaccel *vaccel = mdev_get_drvdata(mdev);
     struct accvisor *accvisor = mdev_to_accvisor(mdev);
-    struct phys_accel_entry *entry = vaccel->phys_accel_entry;
+    struct paccel *entry = vaccel->paccel;
     int ret = -EINVAL;
 
     if (vaccel->mode == VACCEL_TYPE_TIME_SLICING) {
@@ -474,19 +472,19 @@ static void handle_bar_write(unsigned int index, struct vaccel *vaccel,
 
     if (index == VFIO_PCI_BAR0_REGION_INDEX) {
         if (vaccel->mode == VACCEL_TYPE_DIRECT) {
-            if (offset+count >= vaccel->phys_accel_entry->mmio_size) {
+            if (offset+count >= vaccel->paccel->mmio_size) {
                 printk("vaccel: offset too large\n");
                 return;
             }
 
             if (count == 8) {
                 data64 = *(u64*)buf;
-                offset = offset + vaccel->phys_accel_entry->mmio_start;
+                offset = offset + vaccel->paccel->mmio_start;
                 writeq(data64, &vaccel->accvisor->pafu_mmio[offset]);
             }
             else if (count == 4) {
                 data32 = *(u32*)buf;
-                offset = offset + vaccel->phys_accel_entry->mmio_start;
+                offset = offset + vaccel->paccel->mmio_start;
                 writel(data32, &vaccel->accvisor->pafu_mmio[offset]);
             }
         }
@@ -552,7 +550,7 @@ static void handle_bar_write(unsigned int index, struct vaccel *vaccel,
 
             mux_offset = vaccel->iova_start/CL(1) -
                     vaccel->gva_start/CL(1);
-            vm_cfg_offset = vaccel->phys_accel_entry->accel_id * 8 + 0x30;
+            vm_cfg_offset = vaccel->paccel->accel_id * 8 + 0x30;
 
             writeq(mux_offset, &vaccel->accvisor->pafu_mmio[vm_cfg_offset]);
 
@@ -566,7 +564,7 @@ static void handle_bar_write(unsigned int index, struct vaccel *vaccel,
             mutex_lock(&vaccel->accvisor->reset_lock);
             reset_flags = readq(&vaccel->accvisor->pafu_mmio[0x18]);
             new_reset_flags = reset_flags |
-                    (1 << vaccel->phys_accel_entry->accel_id);
+                    (1 << vaccel->paccel->accel_id);
             writeq(new_reset_flags, &vaccel->accvisor->pafu_mmio[0x18]);
             writeq(reset_flags, &vaccel->accvisor->pafu_mmio[0x18]);
             mutex_unlock(&vaccel->accvisor->reset_lock);
@@ -589,18 +587,18 @@ static void handle_bar_read(unsigned int index, struct vaccel *vaccel,
 
     if (index == VFIO_PCI_BAR0_REGION_INDEX) {
         if (vaccel->mode == VACCEL_TYPE_DIRECT) {
-            if (offset+count >= vaccel->phys_accel_entry->mmio_size) {
+            if (offset+count >= vaccel->paccel->mmio_size) {
                 printk("vaccel: offset too large\n");
                 return;
             }
 
             if (count == 8) {
-                offset = offset + vaccel->phys_accel_entry->mmio_start;
+                offset = offset + vaccel->paccel->mmio_start;
                 data64 = readq(&vaccel->accvisor->pafu_mmio[offset]);
                 *(u64*)buf = data64;
             }
             else if (count == 4) {
-                offset = offset + vaccel->phys_accel_entry->mmio_start;
+                offset = offset + vaccel->paccel->mmio_start;
                 data32 = readl(&vaccel->accvisor->pafu_mmio[offset]);
                 *(u32*)buf = data32;
             }
@@ -1102,7 +1100,7 @@ info_show(struct device *dev,
     struct accvisor *accvisor = device_to_accvisor(dev);
 
     return sprintf(buf, "This is a physical FPGA with %d accelerators.\n",
-                        accvisor->num_phys_accels);
+                        accvisor->npaccels);
 }
 static DEVICE_ATTR_RO(info);
 
@@ -1132,7 +1130,7 @@ vaccel_hw_id_show(struct device *dev,
 
     u64 guidh, guidl;
     u8 *mmio = vaccel->accvisor->pafu_mmio;
-    u32 off = vaccel->phys_accel_entry->mmio_start;
+    u32 off = vaccel->paccel->mmio_start;
 
     guidl = readq(&mmio[off+0x8]);
     guidh = readq(&mmio[off+0x10]);
@@ -1149,7 +1147,7 @@ vaccel_sw_id_show(struct device *dev,
     struct vaccel *vaccel = mdev_get_drvdata(mdev);
 
     return sprintf(buf, "phys_id %d\nseq_id %d\n",
-                vaccel->phys_accel_entry->accel_id,
+                vaccel->paccel->accel_id,
                 vaccel->seq_id);
 }
 static DEVICE_ATTR_RO(vaccel_sw_id);
@@ -1307,34 +1305,30 @@ accvisor_mdev_get_fops(u32 num_direct, u32 num_timeslicing)
     return fops;
 }
 
-#define ACCVISOR_GUID_HI 0xd1d383aaca4c4c60
-#define ACCVISOR_GUID_LO 0xa0a013a421139e69
-#define ACCVISOR_MAGIC 0xfffff
-
 static int accvisor_probe(struct accvisor *accvisor, u32 *ndirect, u32 *nts)
 {
     /* TODO: base on real hardware */
 
     int i;
-    int num_phys_accels = readq(&accvisor->pafu_mmio[0x20]);
+    int npaccels = readq(&accvisor->pafu_mmio[0x20]);
 
-    accvisor->num_phys_accels = num_phys_accels;
-    accvisor->phys_accels =
-            kzalloc(sizeof(struct phys_accel_entry)*3, GFP_KERNEL);
+    accvisor->npaccels = npaccels;
+    accvisor->paccels =
+            kzalloc(sizeof(struct paccel)*3, GFP_KERNEL);
 
-    for (i=0; i<num_phys_accels; i++) {
+    for (i=0; i<npaccels; i++) {
         /* TODO: match the magic */
-        accvisor->phys_accels[i].mode = VACCEL_TYPE_DIRECT;
-        accvisor->phys_accels[i].mode_id = i;
-        accvisor->phys_accels[i].accel_id = i;
-        accvisor->phys_accels[i].mmio_start = 0x100*(i+1);
-        accvisor->phys_accels[i].mmio_size = 0x100;
+        accvisor->paccels[i].mode = VACCEL_TYPE_DIRECT;
+        accvisor->paccels[i].mode_id = i;
+        accvisor->paccels[i].accel_id = i;
+        accvisor->paccels[i].mmio_start = 0x100*(i+1);
+        accvisor->paccels[i].mmio_size = 0x100;
 
-        accvisor->phys_accels[i].available_instance = 1;
-        accvisor->phys_accels[i].current_instance = 0;
+        accvisor->paccels[i].available_instance = 1;
+        accvisor->paccels[i].current_instance = 0;
 
-        mutex_init(&accvisor->phys_accels[i].instance_lock);
-        INIT_LIST_HEAD(&accvisor->phys_accels[i].vaccel_list);
+        mutex_init(&accvisor->paccels[i].instance_lock);
+        INIT_LIST_HEAD(&accvisor->paccels[i].vaccel_list);
     }
 
     *ndirect = 3;
