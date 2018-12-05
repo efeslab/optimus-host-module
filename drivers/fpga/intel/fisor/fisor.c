@@ -651,7 +651,7 @@ static void dump_buffer_64(char *buf, uint32_t count)
 
     for (i = 0; i < count; i+=8) {
         x = (uint64_t*)(buf+i);
-        pr_info("buffer: %x\n", *x);
+        pr_info("buffer: %llx\n", *x);
     }
 }
 
