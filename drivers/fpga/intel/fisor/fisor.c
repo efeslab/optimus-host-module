@@ -280,6 +280,8 @@ int vaccel_open(struct mdev_device *mdev)
 {
     unsigned long events;
     struct vaccel *vaccel = mdev_get_drvdata(mdev);
+    u64 reset_flags;
+    u64 new_reset_flags;
 
     pr_info("vaccel: %s\n", __func__);
 
@@ -288,6 +290,17 @@ int vaccel_open(struct mdev_device *mdev)
     events = VFIO_GROUP_NOTIFY_SET_KVM;
     vfio_register_notifier(mdev_dev(mdev), VFIO_GROUP_NOTIFY, &events,
                 &vaccel->group_notifier);
+
+    /* if direct mode, reset the afu */
+    if (vaccel->mode == VACCEL_TYPE_DIRECT) {
+        mutex_lock(&vaccel->fisor->reset_lock);
+        reset_flags = readq(&vaccel->fisor->pafu_mmio[0x18]);
+        new_reset_flags = reset_flags |
+                (1 << vaccel->paccel->accel_id);
+        writeq(new_reset_flags, &vaccel->fisor->pafu_mmio[0x18]);
+        writeq(reset_flags, &vaccel->fisor->pafu_mmio[0x18]);
+        mutex_unlock(&vaccel->fisor->reset_lock);
+    }
 
     return 0;
 }
