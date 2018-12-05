@@ -532,6 +532,7 @@ static void handle_bar_write(unsigned int index, struct vaccel *vaccel,
         {
             int ret;
             struct vaccel_paging_notifier notifier;
+            int idx;
 
             data64 = *(u64*)buf;
             STORE_LE64(&vaccel->bar[VACCEL_BAR_2][offset], data64);
@@ -551,12 +552,12 @@ static void handle_bar_write(unsigned int index, struct vaccel *vaccel,
             printk("vaccel: notifier ret %d va %llx pa %llx\n",
                                 ret, notifier.va, notifier.pa);
 
-            if (data64 == 0) { /* 0 for map */
-                vaccel_iommu_page_map(vaccel, notifier.pa, notifier.pa);
-            }
-            else {
+            idx = srcu_read_lock(&vaccel->kvm->srcu):
+            if (data64 == 0) /* 0 for map */
+                vaccel_iommu_page_map(vaccel, notifier.pa, notifier.va);
+            else
                 vaccel_iommu_page_unmap(vaccel, notifier.va);
-            }
+            srcu_read_unlock(&vaccel->kvm->srcu, idx);
 
             break;
         }
