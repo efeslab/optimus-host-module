@@ -307,7 +307,12 @@ int vaccel_open(struct mdev_device *mdev)
 
 void vaccel_close(struct mdev_device *mdev)
 {
+    struct vaccel *vaccel = mdev_get_drvdata(mdev);
+
     pr_info("vaccel: %s\n", __func__);
+
+    vfio_unregister_notifier(mdev_dev(mdev), VFIO_GROUP_NOTIFY,
+                &vaccel->group_notifier);
 }
 
 static int vaccel_iommu_page_map(struct vaccel *vaccel,
@@ -989,6 +994,8 @@ static int vaccel_reset(struct mdev_device *mdev)
         return -EINVAL;
 
     pr_info("vaccel: %s\n", __func__);
+
+    vaccel_close(mdev);
 
     memset(vaccel->vconfig, 0, FISOR_CONFIG_SPACE_SIZE);
     memset(vaccel->bar[VACCEL_BAR_0], 0, FISOR_BAR_0_SIZE);
