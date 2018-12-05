@@ -620,13 +620,24 @@ static void handle_bar_read(unsigned int index, struct vaccel *vaccel,
     }
 }
 
-static void dump_buffer(char *buf, uint32_t count)
+static void dump_buffer_32(char *buf, uint32_t count)
 {
 	int i;
     uint32_t *x = (uint32_t*)buf;
 
     for (i = 0; i < count; i+=4) {
         x = (uint32_t*)(buf+i);
+        pr_info("buffer: %x\n", *x);
+    }
+}
+
+static void dump_buffer_64(char *buf, uint32_t count)
+{
+	int i;
+    uint64_t *x = (uint64_t*)buf;
+
+    for (i = 0; i < count; i+=8) {
+        x = (uint64_t*)(buf+i);
         pr_info("buffer: %x\n", *x);
     }
 }
@@ -695,11 +706,11 @@ static ssize_t vaccel_access(struct mdev_device *mdev, char *buf, size_t count,
 			 __func__, is_write ? "write" : "read", offset);
 
 		if (is_write) {
-			dump_buffer(buf, count);
+			dump_buffer_32(buf, count);
 			handle_pci_cfg_write(vaccel, offset, buf, count);
 		} else {
 			memcpy(buf, (vaccel->vconfig + offset), count);
-			dump_buffer(buf, count);
+			dump_buffer_32(buf, count);
 		}
 
 		break;
@@ -711,11 +722,11 @@ static ssize_t vaccel_access(struct mdev_device *mdev, char *buf, size_t count,
             offset, count);
 
 		if (is_write) {
-			dump_buffer(buf, count);
+			dump_buffer_64(buf, count);
 			handle_bar_write(index, vaccel, offset, buf, count);
 		} else {
 			handle_bar_read(index, vaccel, offset, buf, count);
-			dump_buffer(buf, count);
+			dump_buffer_64(buf, count);
 		}
 		break;
 
