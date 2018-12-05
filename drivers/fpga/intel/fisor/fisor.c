@@ -137,6 +137,26 @@ static struct fisor* mdev_to_fisor(struct mdev_device *mdev)
     return ret;
 }
 
+static void iommu_unmap_region(struct iommu_domain *domain,
+                int flags, u64 start, u64 npages)
+{
+    long idx, idx_end;
+    u64 cnt = 0;
+
+    printk("vaccel: unmap iommu region start %llx pages %llx\n", start, npages);
+
+    idx = start;
+    idx_end = start + npages * PAGE_SIZE;
+    for (; idx < idx_end; idx += PAGE_SIZE) {
+        if (iommu_iova_to_phys(domain, idx)) {
+            iommu_unmap(domain, idx, PAGE_SIZE);
+            cnt++;
+        }
+    }
+
+    printk("vaccel: unmap %lld pages\n", cnt);
+}
+
 int vaccel_create(struct kobject *kobj, struct mdev_device *mdev)
 {
     struct vaccel *vaccel;
@@ -313,6 +333,11 @@ void vaccel_close(struct mdev_device *mdev)
 
     vfio_unregister_notifier(mdev_dev(mdev), VFIO_GROUP_NOTIFY,
                 &vaccel->group_notifier);
+
+    iommu_unmap_region(vaccel->fisor->domain,
+                vaccel->fisor->iommu_map_flags,
+                vaccel->iova_start,
+                SIZE_64G >> PAGE_SHIFT);
 }
 
 static int vaccel_iommu_page_map(struct vaccel *vaccel,
@@ -552,7 +577,7 @@ static void handle_bar_write(unsigned int index, struct vaccel *vaccel,
             printk("vaccel: notifier ret %d va %llx pa %llx\n",
                                 ret, notifier.va, notifier.pa);
 
-            idx = srcu_read_lock(&vaccel->kvm->srcu):
+            idx = srcu_read_lock(&vaccel->kvm->srcu);
             if (data64 == 0) /* 0 for map */
                 vaccel_iommu_page_map(vaccel, notifier.pa, notifier.va);
             else
