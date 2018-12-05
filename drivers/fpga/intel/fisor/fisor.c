@@ -21,12 +21,12 @@ static void dump_paccels(struct fisor *fisor)
     }
 
     for (i=0; i<fisor->npaccels; i++) {
-        struct paccel *entry = &fisor->paccels[i];
-        u32 accel_id = entry->accel_id;
-        u32 mmio_start = entry->mmio_start;
-        u32 mmio_size = entry->mmio_size;
-        u32 avail_inst = entry->available_instance;
-        u32 curr_inst = entry->current_instance;
+        struct paccel *paccel = &fisor->paccels[i];
+        u32 accel_id = paccel->accel_id;
+        u32 mmio_start = paccel->mmio_start;
+        u32 mmio_size = paccel->mmio_size;
+        u32 avail_inst = paccel->available_instance;
+        u32 curr_inst = paccel->current_instance;
 
         printk("fisor: phys accelerator #%d, mmio %x, mmio_size %x, avail %d, curr %d\n",
                     accel_id, mmio_start, mmio_size, avail_inst, curr_inst);
@@ -82,12 +82,12 @@ static void vaccel_create_config_space(struct vaccel *vaccel)
 	vaccel->vconfig[0x3d] = 0x01;   /* interrupt pin (INTA#) */
 }
 
-static struct paccel* kobj_to_entry(struct kobject *kobj,
+static struct paccel* kobj_to_paccel(struct kobject *kobj,
             struct fisor *fisor, struct mdev_device *mdev,
             vaccel_mode_t *mode, u32 *mode_id)
 {
     char name[FISOR_STRING_LEN];
-    struct paccel *entry = NULL;
+    struct paccel *paccel = NULL;
     int i;
 
     for (i=0; i<fisor->npaccels; i++) {
@@ -108,8 +108,8 @@ static struct paccel* kobj_to_entry(struct kobject *kobj,
         if (!strcmp(kobj->name, name)) {
             *mode = fisor->paccels[i].mode;
             *mode_id = fisor->paccels[i].mode_id;
-            entry = &fisor->paccels[i];
-            return entry;
+            paccel = &fisor->paccels[i];
+            return paccel;
         }
     }
 
@@ -143,7 +143,7 @@ int vaccel_create(struct kobject *kobj, struct mdev_device *mdev)
     struct fisor *fisor;
     vaccel_mode_t mode;
     u32 mode_id = -1;
-    struct paccel *entry;
+    struct paccel *paccel;
 
     printk("fisor: %s\n", __func__);
 
@@ -156,21 +156,21 @@ int vaccel_create(struct kobject *kobj, struct mdev_device *mdev)
 
     fisor = mdev_to_fisor(mdev);
 
-    entry = kobj_to_entry(kobj, fisor, mdev, &mode, &mode_id);
-    if (entry == NULL) {
+    paccel = kobj_to_paccel(kobj, fisor, mdev, &mode, &mode_id);
+    if (paccel == NULL) {
         printk("fisor: %s cannot decode mode and mode_id\n", __func__);
     }
 
     printk("fisor: %s %d\n",
             mode == VACCEL_TYPE_DIRECT ? "direct" : "time_slicing", mode_id);
 
-    if (entry->available_instance <= entry->current_instance) {
+    if (paccel->available_instance <= paccel->current_instance) {
         printk("fisor: too many vaccels!\n");
         return -EINVAL;
     }
 
     vaccel->mode = mode;
-    vaccel->paccel = entry;
+    vaccel->paccel = paccel;
 
     vaccel->vconfig = kzalloc(FISOR_CONFIG_SPACE_SIZE, GFP_KERNEL);
     vaccel->bar[VACCEL_BAR_0] = kzalloc(FISOR_BAR_0_SIZE, GFP_KERNEL);
@@ -198,10 +198,10 @@ int vaccel_create(struct kobject *kobj, struct mdev_device *mdev)
 
     /* if time_slicing, add to paccel->vaccel_list */
     if (vaccel->mode == VACCEL_TYPE_TIME_SLICING) {
-        mutex_lock(&entry->instance_lock);
-        entry->current_instance++;
-        list_add(&vaccel->entry_next, &entry->vaccel_list);
-        mutex_unlock(&entry->instance_lock);
+        mutex_lock(&paccel->instance_lock);
+        paccel->current_instance++;
+        list_add(&vaccel->paccel_next, &paccel->vaccel_list);
+        mutex_unlock(&paccel->instance_lock);
     }
 
     printk("fisor: vaccel created. seq_id %x, mode %s, mode_id %d, gva_start %llx\n",
@@ -220,18 +220,18 @@ int vaccel_remove(struct mdev_device *mdev)
     struct vaccel *mds, *tmp_mds;
     struct vaccel *vaccel = mdev_get_drvdata(mdev);
     struct fisor *fisor = mdev_to_fisor(mdev);
-    struct paccel *entry = vaccel->paccel;
+    struct paccel *paccel = vaccel->paccel;
     int ret = -EINVAL;
 
     if (vaccel->mode == VACCEL_TYPE_TIME_SLICING) {
-        mutex_lock(&entry->instance_lock);
-        list_for_each_entry_safe(mds, tmp_mds, &entry->vaccel_list, entry_next) {
+        mutex_lock(&paccel->instance_lock);
+        list_for_each_entry_safe(mds, tmp_mds, &paccel->vaccel_list, paccel_next) {
             if (vaccel == mds) {
-                list_del(&vaccel->entry_next);
+                list_del(&vaccel->paccel_next);
                 break;
             }
         }
-        mutex_unlock(&entry->instance_lock);
+        mutex_unlock(&paccel->instance_lock);
     }
 
     mutex_lock(&fisor->vaccel_list_lock);
@@ -249,7 +249,7 @@ int vaccel_remove(struct mdev_device *mdev)
     }
     mutex_unlock(&fisor->vaccel_list_lock);
 
-    entry->current_instance++;
+    paccel->current_instance++;
 
     return ret;
 }

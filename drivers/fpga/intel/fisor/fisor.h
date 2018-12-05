@@ -136,7 +136,7 @@ struct vaccel {
 
     struct mutex ops_lock;
     struct list_head next;
-    struct list_head entry_next;
+    struct list_head paccel_next;
 
     struct kvm *kvm;
     struct mdev_device *mdev;
