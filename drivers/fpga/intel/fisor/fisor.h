@@ -76,6 +76,8 @@ struct fisor {
     struct mutex reset_lock;
 
     struct task_struct *worker_kthread;
+    struct list_head worker_task_list;
+    struct mutex worker_lock;
 
     u32 global_seq_id;
     u32 npaccels;
@@ -149,14 +151,6 @@ struct vaccel {
 struct vaccel_paging_notifier {
     uint64_t va;
     uint64_t pa;
-};
-
-struct vaccel_ops {
-    char *name;
-    vaccel_mode_t mode;
-
-    int (*handle_bar_read)(unsigned int, struct vaccel *, u16, char *, u32);
-    int (*handle_bar_write)(unsigned int, struct vaccel *, u16, char *, u32);
 };
 
 #endif /* _VAI_INTERNAL_H_ */

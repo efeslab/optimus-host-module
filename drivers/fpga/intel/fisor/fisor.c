@@ -171,6 +171,7 @@ int vaccel_create(struct kobject *kobj, struct mdev_device *mdev)
 
     vaccel->mode = mode;
     vaccel->paccel = paccel;
+    vaccel->fisor = fisor;
 
     vaccel->vconfig = kzalloc(FISOR_CONFIG_SPACE_SIZE, GFP_KERNEL);
     vaccel->bar[VACCEL_BAR_0] = kzalloc(FISOR_BAR_0_SIZE, GFP_KERNEL);
@@ -249,7 +250,9 @@ int vaccel_remove(struct mdev_device *mdev)
     }
     mutex_unlock(&fisor->vaccel_list_lock);
 
-    paccel->current_instance++;
+    mutex_lock(&paccel->instance_lock);
+    paccel->current_instance--;
+    mutex_unlock(&paccel->instance_lock);
 
     return ret;
 }
@@ -623,8 +626,8 @@ static void dump_buffer(char *buf, uint32_t count)
     uint32_t *x = (uint32_t*)buf;
 
     for (i = 0; i < count; i+=4) {
-        pr_info("buffer: %x\n", *x);
         x = (uint32_t*)(buf+i);
+        pr_info("buffer: %x\n", *x);
     }
 }
 
@@ -1385,7 +1388,6 @@ int fpga_register_afu_mdev_device(struct platform_device *pdev)
     struct mdev_parent_ops *fops;
     struct device *pafu = &pdev->dev;
     struct feature_platform_data *pdata = dev_get_platdata(pafu);
-    /* struct fpga_afu *afu = fpga_pdata_get_private(pdata); */
     struct feature_header *hdr =
             get_feature_ioaddr_by_index(pafu, PORT_FEATURE_ID_UAFU);
     struct feature_afu_header *afu_hdr =
@@ -1419,7 +1421,9 @@ int fpga_register_afu_mdev_device(struct platform_device *pdev)
     fisor->pafu_mmio = (u8 *)hdr;
     mutex_init(&fisor->vaccel_list_lock);
     mutex_init(&fisor->reset_lock);
+    mutex_init(&fisor->worker_lock);
     INIT_LIST_HEAD(&fisor->vaccel_devices_list);
+    INIT_LIST_HEAD(&fisor->worker_task_list);
     fisor->global_seq_id = 0;
     
     fisor_probe(fisor, &ndirect, &nts);
@@ -1468,6 +1472,8 @@ void fpga_unregister_afu_mdev_device(struct platform_device *pdev)
 
     fisor_iommu_uinit(fisor, pdev);
 
+	mdev_unregister_device(&pdev->dev);
+
     mutex_lock(&fisor_list_lock);
     list_for_each_entry_safe(d, tmp_d, &fisor_list, next) {
         if (fisor == d) {
@@ -1476,6 +1482,4 @@ void fpga_unregister_afu_mdev_device(struct platform_device *pdev)
         }
     }
     mutex_unlock(&fisor_list_lock);
-
-	mdev_unregister_device(&pdev->dev);
 }

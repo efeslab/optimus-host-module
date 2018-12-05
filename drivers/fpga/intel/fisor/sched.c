@@ -1,21 +1,24 @@
 #include "afu.h"
 #include "fisor.h"
 
-/* All MMIO access and interface emulation should be in this function,
- * however, currently we only use it to monitor the transaction of 
- * time-slicing devices */
-static int fisor_worker(void *args) {
-    while (1) {
-        if (kthread_should_stop()) {
-            printk("fuck: who killed me?\n");
-            do_exit(0);
+static int fisor_polling_round(struct fisor *fisor) {
+    struct paccel *paccels = fisor->paccels;
+    u32 npaccels = fisor->npaccels;
+    int i;
+
+    for (i=0; i<npaccels; i++) {
+        struct paccel *paccel = &fisor->paccels[i];
+        struct fisor *d, *tmp_d;
+
+        if (paccel->mode == VACCEL_TYPE_DIRECT)
+            continue;
+
+        list_for_each_entry_safe(d, tmp_d, &paccel->vaccel_list, paccel_next) {
+        
         }
-
-        msleep(200);
-        schedule();
-
-        printk("fuck: HARP, FPGA, and Intel.\n");
     }
+            
+
 }
 
 static int fisor_start_worker(struct fisor *fisor)
