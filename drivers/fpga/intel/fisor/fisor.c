@@ -279,6 +279,10 @@ int vaccel_remove(struct mdev_device *mdev)
     paccel->current_instance--;
     mutex_unlock(&paccel->instance_lock);
 
+    printk("vaccel: vaccel removed, paccel %d curr inst %d/%d\n",
+                    paccel->accel_id, paccel->current_instance,
+                    paccel->available_instance);
+
     return ret;
 }
 
