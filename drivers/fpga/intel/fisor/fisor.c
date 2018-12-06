@@ -337,7 +337,7 @@ void vaccel_close(struct mdev_device *mdev)
     iommu_unmap_region(vaccel->fisor->domain,
                 vaccel->fisor->iommu_map_flags,
                 vaccel->iova_start,
-                SIZE_64G << PAGE_SHIFT);
+                SIZE_64G >> PAGE_SHIFT);
 }
 
 static int vaccel_iommu_page_map(struct vaccel *vaccel,
@@ -348,6 +348,8 @@ static int vaccel_iommu_page_map(struct vaccel *vaccel,
     kvm_pfn_t pfn = gfn_to_pfn(kvm, gfn);
     struct iommu_domain *domain = vaccel->fisor->domain;
     int flags = vaccel->fisor->iommu_map_flags;
+
+    printk("fisor: iommu map gva %llx to gpa %llx\n", gva, gpa);
 
     /* add to IOMMU */
     if ((gva & 0xfff) != 0) {
@@ -360,7 +362,7 @@ static int vaccel_iommu_page_map(struct vaccel *vaccel,
         vaccel->iova_start &= (~0xfff);
     }
 
-    if (gva >= vaccel->iova_start + SIZE_64G) {
+    if (gva >= vaccel->gva_start + SIZE_64G) {
         printk("fisor: %s err gva too large\n", __func__);
         return -EINVAL;
     }
