@@ -224,6 +224,11 @@ int vaccel_create(struct kobject *kobj, struct mdev_device *mdev)
         list_add(&vaccel->paccel_next, &paccel->vaccel_list);
         mutex_unlock(&paccel->instance_lock);
     }
+    else {
+        mutex_lock(&paccel->instance_lock);
+        paccel->current_instance++;
+        mutex_unlock(&paccel->instance_lock);
+    }
 
     printk("fisor: vaccel created. seq_id %x, mode %s, mode_id %d, gva_start %llx\n",
                     vaccel->seq_id,
@@ -1378,7 +1383,7 @@ static int fisor_probe(struct fisor *fisor, u32 *ndirect, u32 *nts)
 
     fisor->npaccels = npaccels;
     fisor->paccels =
-            kzalloc(sizeof(struct paccel)*3, GFP_KERNEL);
+            kzalloc(sizeof(struct paccel)*npaccels, GFP_KERNEL);
 
     for (i=0; i<npaccels; i++) {
         /* TODO: match the magic */
