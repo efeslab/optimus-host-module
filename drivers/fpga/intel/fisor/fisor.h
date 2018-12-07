@@ -28,6 +28,7 @@
 #include <linux/mmu_context.h>
 #include <linux/platform_device.h>
 #include <linux/iommu.h>
+#include <linux/kthread.h>
 
 #define VERSION_STRING  "0.1"
 #define DRIVER_AUTHOR   "Jiacheng Ma"
@@ -121,8 +122,18 @@ struct paccel {
     u32 current_instance;
     struct list_head vaccel_list;
 
+    struct vaccel *curr_vaccel;
+
+    struct fisor *fisor;
+
     /* TODO: pointer to some bar address? */
 };
+
+typedef enum {
+    VACCEL_TRANSACTION_IDLE,
+    VACCEL_TRANSACTION_COMMITTED,
+    VACCEL_TRANSACTION_RUNNING
+} vaccel_trans_stat_t;
 
 struct vaccel {
     u8 *vconfig;
@@ -130,6 +141,8 @@ struct vaccel {
 
     vaccel_mode_t mode;
     u32 seq_id;
+
+    bool is_using;
 
     u64 gva_start;
     u64 iova_start;
@@ -139,9 +152,13 @@ struct vaccel {
     struct list_head next;
     struct list_head paccel_next;
 
+    struct mutex trans_lock;
+
     struct kvm *kvm;
     struct mdev_device *mdev;
     struct notifier_block group_notifier;
+
+    vaccel_trans_stat_t trans_status;
 
     struct fisor *fisor;
     struct paccel *paccel;
@@ -151,5 +168,11 @@ struct vaccel_paging_notifier {
     uint64_t va;
     uint64_t pa;
 };
+
+
+void dump_paccels(struct fisor *fisor);
+
+void do_paccel_soft_reset(struct paccel *paccel);
+void do_vaccel_bar_cleanup(struct vaccel *vaccel);
 
 #endif /* _VAI_INTERNAL_H_ */

@@ -4,7 +4,33 @@
 DEFINE_MUTEX(fisor_list_lock);
 struct list_head fisor_list = LIST_HEAD_INIT(fisor_list);
 
-static void dump_paccels(struct fisor *fisor)
+void do_paccel_soft_reset(struct paccel *paccel)
+{
+    u64 reset_flags, new_reset_flags;
+    struct fisor *fisor;
+
+    WARN_ON(paccel->fisor == NULL);
+
+    fisor = paccel->fisor;
+
+    mutex_lock(&fisor->reset_lock);
+    reset_flags = readq(&fisor->pafu_mmio[0x18]);
+    new_reset_flags = reset_flags |
+            (1 << paccel->accel_id);
+    writeq(new_reset_flags, &fisor->pafu_mmio[0x18]);
+    writeq(reset_flags, &fisor->pafu_mmio[0x18]);
+    mutex_unlock(&fisor->reset_lock);
+}   
+
+void do_vaccel_bar_cleanup(struct vaccel *vaccel)
+{
+    WARN_ON(vaccel);
+    WARN_ON(vaccel->bar);
+
+    memset(vaccel->bar, 0, FISOR_BAR_0_SIZE);
+}
+
+void dump_paccels(struct fisor *fisor)
 {
     struct paccel *paccels;
     int i;
@@ -137,6 +163,13 @@ static struct fisor* mdev_to_fisor(struct mdev_device *mdev)
     return ret;
 }
 
+static int fisor_iommu_fault_handler(struct iommu_domain *domain,
+            struct device *dev, unsigned long iova, int flags, void *arg)
+{
+    pr_err("fisor: iommu page fault at %lx\n", iova);
+    return 0;
+}
+
 static void iommu_unmap_region(struct iommu_domain *domain,
                 int flags, u64 start, u64 npages)
 {
@@ -205,6 +238,8 @@ int vaccel_create(struct kobject *kobj, struct mdev_device *mdev)
     mutex_init(&vaccel->ops_lock);
     vaccel->mdev = mdev;
     mdev_set_drvdata(mdev, vaccel);
+
+    mutex_init(&vaccel->trans_lock);
 
     vaccel_create_config_space(vaccel);
     vaccel->gva_start = -1;
@@ -316,8 +351,11 @@ int vaccel_open(struct mdev_device *mdev)
     vfio_register_notifier(mdev_dev(mdev), VFIO_GROUP_NOTIFY, &events,
                 &vaccel->group_notifier);
 
-    /* if direct mode, reset the afu */
+    /* set using to true, polling uses this information */
+    vaccel->is_using = true;
+
     if (vaccel->mode == VACCEL_TYPE_DIRECT) {
+        /* if direct mode, reset the afu */
         mutex_lock(&vaccel->fisor->reset_lock);
         reset_flags = readq(&vaccel->fisor->pafu_mmio[0x18]);
         new_reset_flags = reset_flags |
@@ -325,6 +363,10 @@ int vaccel_open(struct mdev_device *mdev)
         writeq(new_reset_flags, &vaccel->fisor->pafu_mmio[0x18]);
         writeq(reset_flags, &vaccel->fisor->pafu_mmio[0x18]);
         mutex_unlock(&vaccel->fisor->reset_lock);
+    }
+    else {
+        /* if time slicing mode, clean up the bar */
+        do_vaccel_bar_cleanup(vaccel);
     }
 
     return 0;
@@ -336,6 +378,13 @@ void vaccel_close(struct mdev_device *mdev)
 
     pr_info("vaccel: %s\n", __func__);
 
+    /* acqure transaction lock to avoid NULL ptr err */
+    if (vaccel->mode == VACCEL_TYPE_TIME_SLICING) {
+        mutex_lock(&vaccel->trans_lock);
+    }
+
+    vaccel->is_using = false;
+
     vfio_unregister_notifier(mdev_dev(mdev), VFIO_GROUP_NOTIFY,
                 &vaccel->group_notifier);
 
@@ -343,6 +392,11 @@ void vaccel_close(struct mdev_device *mdev)
                 vaccel->fisor->iommu_map_flags,
                 vaccel->iova_start,
                 SIZE_64G >> PAGE_SHIFT);
+
+    if (vaccel->mode == VACCEL_TYPE_TIME_SLICING) {
+        do_vaccel_bar_cleanup(vaccel);
+        mutex_unlock(&vaccel->trans_lock);
+    }
 }
 
 static int vaccel_iommu_page_map(struct vaccel *vaccel,
@@ -524,12 +578,12 @@ static void handle_bar_write(unsigned int index, struct vaccel *vaccel,
     u32 data32;
 
     if (index == VFIO_PCI_BAR0_REGION_INDEX) {
-        if (vaccel->mode == VACCEL_TYPE_DIRECT) {
-            if (offset+count >= vaccel->paccel->mmio_size) {
-                printk("vaccel: offset too large\n");
-                return;
-            }
+        if (offset+count >= vaccel->paccel->mmio_size) {
+            printk("vaccel: offset too large\n");
+            return;
+        }
 
+        if (vaccel->mode == VACCEL_TYPE_DIRECT) {
             if (count == 8) {
                 data64 = *(u64*)buf;
                 offset = offset + vaccel->paccel->mmio_start;
@@ -541,9 +595,19 @@ static void handle_bar_write(unsigned int index, struct vaccel *vaccel,
                 writel(data32, &vaccel->fisor->pafu_mmio[offset]);
             }
         }
-        else {
-            printk("unimplemented\n");
-            /* TODO */
+        else if (vaccel->mode == VACCEL_TYPE_TIME_SLICING) {
+            if (count == 8) {
+                data64 = *(u64*)buf;
+                STORE_LE64(&vaccel->bar[offset], data64);
+            }
+            else {
+                pr_err("vaccel: only support 64-bit MMIO\n");
+            }
+
+            if (index == 0x18) {
+                vaccel->trans_status = VACCEL_TRANSACTION_COMMITTED;
+                pr_info("vaccel: transaction committed\n");
+            }
         }
     }
     else if (index == VFIO_PCI_BAR2_REGION_INDEX) {
@@ -640,12 +704,12 @@ static void handle_bar_read(unsigned int index, struct vaccel *vaccel,
     u32 data32;
 
     if (index == VFIO_PCI_BAR0_REGION_INDEX) {
-        if (vaccel->mode == VACCEL_TYPE_DIRECT) {
-            if (offset+count >= vaccel->paccel->mmio_size) {
-                printk("vaccel: offset too large\n");
-                return;
-            }
+        if (offset+count >= vaccel->paccel->mmio_size) {
+            printk("vaccel: offset too large\n");
+            return;
+        }
 
+        if (vaccel->mode == VACCEL_TYPE_DIRECT) {
             if (count == 8) {
                 offset = offset + vaccel->paccel->mmio_start;
                 data64 = readq(&vaccel->fisor->pafu_mmio[offset]);
@@ -658,8 +722,13 @@ static void handle_bar_read(unsigned int index, struct vaccel *vaccel,
             }
         }
         else {
-            printk("unimplemented\n");
-            /* TODO */
+            if (count == 8) {
+                LOAD_LE64(&vaccel->bar[VACCEL_BAR_0][offset], data64);
+                *(u64*)buf = data64;
+            }
+            else {
+                pr_err("vaccel: only support 64-bit MMIO\n");
+            }
         }
     }
     else {
@@ -1396,6 +1465,8 @@ static int fisor_probe(struct fisor *fisor, u32 *ndirect, u32 *nts)
         fisor->paccels[i].available_instance = 1;
         fisor->paccels[i].current_instance = 0;
 
+        fisor->paccels[i].fisor = fisor;
+
         mutex_init(&fisor->paccels[i].instance_lock);
         INIT_LIST_HEAD(&fisor->paccels[i].vaccel_list);
     }
@@ -1432,6 +1503,9 @@ static int fisor_iommu_init(struct fisor *fisor,
     else {
         printk("fisor: attach device success\n");
     }
+
+    iommu_set_fault_handler(fisor->domain,
+            fisor_iommu_fault_handler, NULL);
 
     return 0;
 }

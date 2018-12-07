@@ -45,6 +45,7 @@ intel-fpga-afu-y += drivers/fpga/intel/dma-region.o
 intel-fpga-afu-y += drivers/fpga/intel/afu-error.o
 intel-fpga-afu-y += drivers/fpga/intel/afu-check.o
 intel-fpga-afu-y += drivers/fpga/intel/fisor/fisor.o
+intel-fpga-afu-y += drivers/fpga/intel/fisor/sched.o
 
 intel-fpga-pac-hssi-y := drivers/fpga/intel/intel-fpga-pac-hssi.o
 
