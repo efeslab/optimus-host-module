@@ -29,6 +29,8 @@
 #include <linux/platform_device.h>
 #include <linux/iommu.h>
 #include <linux/kthread.h>
+#include <linux/atomic.h>
+
 
 #define VERSION_STRING  "0.1"
 #define DRIVER_AUTHOR   "Jiacheng Ma"
@@ -79,7 +81,8 @@ struct fisor {
     struct list_head worker_task_list;
     struct mutex worker_lock;
 
-    u32 global_seq_id;
+    atomic_t next_seq_id;
+
     u32 npaccels;
     struct paccel *paccels;
 };
@@ -107,42 +110,68 @@ enum {
 typedef enum {
     VACCEL_TYPE_DIRECT,
     VACCEL_TYPE_TIME_SLICING
-} vaccel_mode_t;
+} fisor_mode_t;
+
+struct paccel_ops {
+    int (*vaccel_init)(struct vaccel *vaccel, struct paccel *paccel, struct mdev *mdev);
+    int (*vaccel_uinit)(struct vaccel *vaccel);
+};
+
+struct vaccel_ops {
+    int (*handle_mmio_read)(struct vaccel *vaccel, u32 index, u32 offset, u64 *val);
+    int (*handle_mmio_write)(struct vaccel *vaccel, u32 index, u32 offset, u64 val);
+    int (*submit_to_hardware)(struct vaccel *vaccel); 
+};
+
+extern struct paccel_ops paccel_direct_ops;
+extern struct paccel_ops paccel_timeslicing_ops;
+extern struct vaccel_ops vaccel_direct_ops;
+extern struct vaccel_ops vaccel_timeslicing_ops;
 
 struct paccel {
-    vaccel_mode_t mode;
-    u32 mode_id;
+    struct fisor *fisor;
+    fisor_mode_t mode;
 
+    u32 mode_id;
     u32 accel_id;
+
     u32 mmio_start;
     u32 mmio_size;
 
-    struct mutex instance_lock;
-    u32 available_instance;
-    u32 current_instance;
-    struct list_head vaccel_list;
+    struct mutex ops_lock;
 
-    struct vaccel *curr_vaccel;
+    union {
+        struct {
+            bool occupied;
+        } sm;
+        struct {
+            u32 total;
+            u32 occupied;
+            struct list_head children;
+            struct vaccel *curr;
+        } tm;
+    };
 
-    struct fisor *fisor;
-
-    /* TODO: pointer to some bar address? */
+    struct paccel_ops *ops;
 };
 
 typedef enum {
     VACCEL_TRANSACTION_IDLE,
-    VACCEL_TRANSACTION_COMMITTED,
-    VACCEL_TRANSACTION_RUNNING
+    VACCEL_TRANSACTION_STARTED,
+    VACCEL_TRANSACTION_HARDWARE
 } vaccel_trans_stat_t;
 
 struct vaccel {
+    struct fisor *fisor;
+    struct paccel *paccel;
+
     u8 *vconfig;
     u8 *bar[VACCEL_BAR_NUM];
 
-    vaccel_mode_t mode;
+    fisor_mode_t mode;
     u32 seq_id;
 
-    bool is_using;
+    bool enabled;
 
     u64 gva_start;
     u64 iova_start;
@@ -150,18 +179,23 @@ struct vaccel {
 
     struct mutex ops_lock;
     struct list_head next;
-    struct list_head paccel_next;
-
-    struct mutex trans_lock;
 
     struct kvm *kvm;
     struct mdev_device *mdev;
     struct notifier_block group_notifier;
 
-    vaccel_trans_stat_t trans_status;
+    union {
+        struct {
+            u32 padding;
+        } sm;
+        struct {
+            struct list_head paccel_next;
+            struct mutex trans_lock;
+            vaccel_trans_stat_t trans_status;
+        } tm;
+    };
 
-    struct fisor *fisor;
-    struct paccel *paccel;
+    struct vaccel_ops *ops;
 };
 
 struct vaccel_paging_notifier {
@@ -169,10 +203,44 @@ struct vaccel_paging_notifier {
     uint64_t pa;
 };
 
+void dump_buffer_32(char *buf, uint32_t count);
+void dump_buffer_64(char *buf, uint64_t count);
+
+void vaccel_read_gpa(struct vaccel *vaccel,
+            u64 gpa, void *buf, u64 len);
+
+struct paccel* kobj_to_paccel(struct kobject *kobj,
+            struct fisor *fisor, struct mdev_device *mdev,
+            fisor_mode_t *mode, u32 *mode_id);
+struct fisor* mdev_to_fisor(struct mdev_device *mdev);
+struct fisor* pdev_to_fisor(struct platform_device *pdev);
+struct fisor* device_to_fisor(struct device *pafu);
+
+void iommu_unmap_region(struct iommu_domain *domain,
+                int flags, u64 start, u64 npages);
+int vaccel_iommu_page_map(struct vaccel *vaccel,
+            u64 gpa, u64 gva);
+void vaccel_iommu_page_unmap(struct vaccel *vaccel, u64 gva)
 
 void dump_paccels(struct fisor *fisor);
 
+void vaccel_create_config_space(struct vaccel *vaccel);
 void do_paccel_soft_reset(struct paccel *paccel);
 void do_vaccel_bar_cleanup(struct vaccel *vaccel);
+
+#define fisor_err(fmt, args...) \
+    pr_err("fisor: "fmt, ##args);
+#define fisor_info(fmt, args...) \
+    pr_info("fisor: "fmt, ##args);
+
+#define paccel_err(paccel, fmt, args...) \
+    pr_err("paccel[%d]: "fmt, paccel->accel_id, ##args)
+#define paccel_info(paccel, fmt, args...) \
+    pr_info("paccel[%d]: "fmt, paccel->accel_id, ##args)
+
+#define vaccel_err(vaccel, fmt, args...) \
+    pr_err("vaccel[%d]: "fmt, vaccel->seq_id, ##args)
+#define vaccel_info(vaccel, fmt, args...) \
+    pr_info("vaccel[%d]: "fmt, vaccel->seq_id, ##args)
 
 #endif /* _VAI_INTERNAL_H_ */

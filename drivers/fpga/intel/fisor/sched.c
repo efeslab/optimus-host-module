@@ -100,7 +100,7 @@ static int fisor_polling_round(struct fisor *fisor) {
             /* Check the current status.
              * If it is running, check the TCR */
 
-            if (ptr->is_using == false) {
+            if (ptr->enabled == false) {
                 continue;
             }
 
