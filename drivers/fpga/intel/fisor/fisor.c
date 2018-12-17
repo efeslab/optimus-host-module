@@ -911,8 +911,8 @@ static int fisor_probe(struct fisor *fisor, u32 *ndirect, u32 *nts)
         mutex_init(&fisor->paccels[i].ops_lock);
     }
 
-    *ndirect = 3;
-    *nts = 0;
+    *ndirect = 0;
+    *nts = 3;
 
     return 0;
 }
