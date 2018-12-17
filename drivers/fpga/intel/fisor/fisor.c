@@ -399,7 +399,7 @@ ssize_t vaccel_write(struct mdev_device *mdev, const char __user *buf,
 	int ret;
     struct vaccel *vaccel = mdev_get_drvdata(mdev);
 
-    vaccel_info(vaccel, "%s: count %d", __func__, count);
+    vaccel_info(vaccel, "%s: count %ld", __func__, count);
 
 	while (count) {
 		size_t filled;

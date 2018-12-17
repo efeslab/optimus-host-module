@@ -174,8 +174,7 @@ static int vaccel_direct_open(struct mdev_device *mdev)
 {
     unsigned long events;
     struct vaccel *vaccel = mdev_get_drvdata(mdev);
-    u64 reset_flags;
-    u64 new_reset_flags;
+    struct paccel *paccel = vaccel->paccel;
 
     vaccel_info(vaccel, "vaccel: %s\n", __func__);
 
@@ -188,7 +187,7 @@ static int vaccel_direct_open(struct mdev_device *mdev)
     /* set using to true */
     vaccel->enabled = true;
 
-    do_paccel_soft_reset(vaccel);
+    do_paccel_soft_reset(paccel);
 
     return 0;
 }
