@@ -1,8 +1,21 @@
 #include "afu.h"
 #include "fisor.h"
 
+static int paccel_direct_dump(struct paccel *paccel)
+{
+    u32 accel_id = paccel->accel_id;
+    u32 mmio_start = paccel->mmio_start;
+    u32 mmio_size = paccel->mmio_size;
+    bool occupied = paccel->direct.occupied;
+
+    printk("fisor: phys accelerator #%d, mmio %x, mmio_size %x, occupied %s\n",
+                accel_id, mmio_start, mmio_size, occupied?"true":"false");
+
+    return 0;
+}
+
 static int vaccel_direct_init(struct vaccel *vaccel,
-                struct paccel *paccel, struct mdev *mdev)
+                struct paccel *paccel, struct mdev_device *mdev)
 {
     struct fisor *fisor;
 
@@ -18,7 +31,7 @@ static int vaccel_direct_init(struct vaccel *vaccel,
         return -EINVAL;
     }
 
-    if (paccel->sm.occupied) {
+    if (paccel->direct.occupied) {
         paccel_err(paccel, "already occupied");
         return -EINVAL;
     }
@@ -51,7 +64,7 @@ static int vaccel_direct_init(struct vaccel *vaccel,
 
     /* set occupied */
     mutex_lock(&paccel->ops_lock);
-    paccel->sm.occupied = true;
+    paccel->direct.occupied = true;
     mutex_unlock(&paccel->ops_lock);
 
     return 0;
@@ -59,6 +72,7 @@ static int vaccel_direct_init(struct vaccel *vaccel,
 
 static int vaccel_direct_uinit(struct vaccel *vaccel)
 {
+    struct mdev_device *mdev = vaccel->mdev;
     struct paccel *paccel = vaccel->paccel;
 
     if (vaccel->mode != VACCEL_TYPE_DIRECT) {
@@ -78,7 +92,7 @@ static int vaccel_direct_uinit(struct vaccel *vaccel)
 
     /* set occupied as false */
     mutex_lock(&paccel->ops_lock);
-    paccel->sm.occupied = false;
+    paccel->direct.occupied = false;
     mutex_unlock(&paccel->ops_lock);
 
     return 0;
@@ -89,7 +103,6 @@ static int vaccel_direct_handle_mmio_read(struct vaccel *vaccel,
 {
     struct fisor *fisor = vaccel->fisor;
     struct paccel *paccel = vaccel->paccel;
-    int ret;
     u64 data64;
 
     if (vaccel->mode != VACCEL_TYPE_DIRECT) {
@@ -157,13 +170,63 @@ static int vaccel_direct_handle_mmio_write(struct vaccel *vaccel,
     return 0;
 }
 
+static int vaccel_direct_open(struct mdev_device *mdev)
+{
+    unsigned long events;
+    struct vaccel *vaccel = mdev_get_drvdata(mdev);
+    u64 reset_flags;
+    u64 new_reset_flags;
+
+    vaccel_info(vaccel, "vaccel: %s\n", __func__);
+
+    vaccel->group_notifier.notifier_call = vaccel_group_notifier;
+
+    events = VFIO_GROUP_NOTIFY_SET_KVM;
+    vfio_register_notifier(mdev_dev(mdev), VFIO_GROUP_NOTIFY, &events,
+                &vaccel->group_notifier);
+
+    /* set using to true */
+    vaccel->enabled = true;
+
+    do_paccel_soft_reset(vaccel);
+
+    return 0;
+}
+
+static int vaccel_direct_close(struct mdev_device *mdev)
+{
+    struct vaccel *vaccel = mdev_get_drvdata(mdev);
+
+    vaccel_info(vaccel, "call: %s\n", __func__);
+
+    vaccel->enabled = false;
+    vfio_unregister_notifier(mdev_dev(mdev), VFIO_GROUP_NOTIFY,
+                &vaccel->group_notifier);
+    iommu_unmap_region(vaccel->fisor->domain,
+                vaccel->fisor->iommu_map_flags,
+                vaccel->iova_start,
+                SIZE_64G >> PAGE_SHIFT);
+
+    return 0;
+}
+
+static int vaccel_direct_soft_reset(struct vaccel *vaccel)
+{
+    /* to soft reset we write a special register */
+    do_paccel_soft_reset(vaccel->paccel);
+    return 0;
+}
+
 struct paccel_ops paccel_direct_ops = {
     .vaccel_init = vaccel_direct_init,
-    .vaccel_uinit = vaccel_direct_uinit
+    .vaccel_uinit = vaccel_direct_uinit,
+    .dump = paccel_direct_dump,
 };
 
 struct vaccel_ops vaccel_direct_ops = {
+    .open = vaccel_direct_open,
+    .close = vaccel_direct_close,
+    .soft_reset = vaccel_direct_soft_reset,
     .handle_mmio_read = vaccel_direct_handle_mmio_read,
     .handle_mmio_write = vaccel_direct_handle_mmio_write,
-    .submit_to_hardware = NULL
 };

@@ -219,19 +219,7 @@ int vaccel_handle_bar2_write(struct vaccel *vaccel, u32 offset, u64 val)
     }
     case 0x18: /* RESET */
     {
-        u64 reset_flags;
-        u64 new_reset_flags;
-
-        /* soft reset is implemented with mmio 0x18,
-         * to perform a soft reset we need to write 1 to
-         * a bit and then write 0. */
-        mutex_lock(&fisor->reset_lock);
-        reset_flags = readq(&fisor->pafu_mmio[0x18]);
-        new_reset_flags = reset_flags |
-                (1 << paccel->accel_id);
-        writeq(new_reset_flags, &fisor->pafu_mmio[0x18]);
-        writeq(reset_flags, &fisor->pafu_mmio[0x18]);
-        mutex_unlock(&fisor->reset_lock);
+        vaccel->ops->soft_reset(vaccel);
 
         break;
     }
@@ -243,6 +231,25 @@ int vaccel_handle_bar2_write(struct vaccel *vaccel, u32 offset, u64 val)
     return 0;
 }
 
+int vaccel_group_notifier(struct notifier_block *nb,
+            long unsigned int action, void *data)
+{
+    struct vaccel *vaccel = container_of(nb, struct vaccel, group_notifier);
+
+    if (action == VFIO_GROUP_NOTIFY_SET_KVM) {
+        vaccel->kvm = data;
+
+        if (!data) {
+            printk("vaccel: set KVM null\n");
+            return NOTIFY_BAD;
+        }
+        else {
+            printk("vaccel: set KVM success\n");
+        }
+    }
+    return NOTIFY_OK;
+}
+
 void do_paccel_soft_reset(struct paccel *paccel)
 {
     u64 reset_flags, new_reset_flags;
@@ -252,13 +259,13 @@ void do_paccel_soft_reset(struct paccel *paccel)
 
     fisor = paccel->fisor;
 
-    mutex_lock(&fisor->reset_lock);
+    mutex_lock(&fisor->ops_lock);
     reset_flags = readq(&fisor->pafu_mmio[0x18]);
     new_reset_flags = reset_flags |
             (1 << paccel->accel_id);
     writeq(new_reset_flags, &fisor->pafu_mmio[0x18]);
     writeq(reset_flags, &fisor->pafu_mmio[0x18]);
-    mutex_unlock(&fisor->reset_lock);
+    mutex_unlock(&fisor->ops_lock);
 }   
 
 void do_vaccel_bar_cleanup(struct vaccel *vaccel)
@@ -268,5 +275,4 @@ void do_vaccel_bar_cleanup(struct vaccel *vaccel)
 
     memset(vaccel->bar, 0, FISOR_BAR_0_SIZE);
 }
-
 

@@ -63,32 +63,24 @@
 				(((u64)(1) << FISOR_VFIO_PCI_OFFSET_SHIFT) - 1)
 
 struct paccel;
+struct vaccel;
 
 struct fisor {
     struct device *pafu_device;
     u8 *pafu_mmio;
     struct list_head next;
 
-    struct mutex vaccel_list_lock;
-    struct list_head vaccel_devices_list;
+    struct mutex ops_lock;
+    struct list_head vaccel_list;
 
     struct iommu_domain *domain;
     int iommu_map_flags;
-
-    struct mutex reset_lock;
-
-    struct task_struct *worker_kthread;
-    struct list_head worker_task_list;
-    struct mutex worker_lock;
 
     atomic_t next_seq_id;
 
     u32 npaccels;
     struct paccel *paccels;
 };
-
-extern struct mutex fisor_list_lock;
-extern struct list_head fisor_list;
 
 #define SIZE_64G (64*1024*1024*1024LLU)
 
@@ -113,20 +105,26 @@ typedef enum {
 } fisor_mode_t;
 
 struct paccel_ops {
-    int (*vaccel_init)(struct vaccel *vaccel, struct paccel *paccel, struct mdev *mdev);
+    int (*vaccel_init)(struct vaccel *vaccel, struct paccel *paccel, struct mdev_device *mdev);
     int (*vaccel_uinit)(struct vaccel *vaccel);
+    int (*dump)(struct paccel *paccel);
 };
 
 struct vaccel_ops {
+    int (*open)(struct mdev_device *mdev);
+    int (*close)(struct mdev_device *mdev);
     int (*handle_mmio_read)(struct vaccel *vaccel, u32 index, u32 offset, u64 *val);
     int (*handle_mmio_write)(struct vaccel *vaccel, u32 index, u32 offset, u64 val);
-    int (*submit_to_hardware)(struct vaccel *vaccel); 
+    int (*soft_reset)(struct vaccel *vaccel);
 };
 
+extern struct mutex fisor_list_lock;
+extern struct list_head fisor_list;
+
 extern struct paccel_ops paccel_direct_ops;
-extern struct paccel_ops paccel_timeslicing_ops;
+extern struct paccel_ops paccel_time_slicing_ops;
 extern struct vaccel_ops vaccel_direct_ops;
-extern struct vaccel_ops vaccel_timeslicing_ops;
+extern struct vaccel_ops vaccel_time_slicing_ops;
 
 struct paccel {
     struct fisor *fisor;
@@ -143,13 +141,13 @@ struct paccel {
     union {
         struct {
             bool occupied;
-        } sm;
+        } direct;
         struct {
             u32 total;
             u32 occupied;
             struct list_head children;
             struct vaccel *curr;
-        } tm;
+        } timeslc;
     };
 
     struct paccel_ops *ops;
@@ -187,12 +185,11 @@ struct vaccel {
     union {
         struct {
             u32 padding;
-        } sm;
+        } direct;
         struct {
             struct list_head paccel_next;
-            struct mutex trans_lock;
             vaccel_trans_stat_t trans_status;
-        } tm;
+        } timeslc;
     };
 
     struct vaccel_ops *ops;
@@ -204,9 +201,9 @@ struct vaccel_paging_notifier {
 };
 
 void dump_buffer_32(char *buf, uint32_t count);
-void dump_buffer_64(char *buf, uint64_t count);
+void dump_buffer_64(char *buf, uint32_t count);
 
-void vaccel_read_gpa(struct vaccel *vaccel,
+int vaccel_read_gpa(struct vaccel *vaccel,
             u64 gpa, void *buf, u64 len);
 
 struct paccel* kobj_to_paccel(struct kobject *kobj,
@@ -220,13 +217,18 @@ void iommu_unmap_region(struct iommu_domain *domain,
                 int flags, u64 start, u64 npages);
 int vaccel_iommu_page_map(struct vaccel *vaccel,
             u64 gpa, u64 gva);
-void vaccel_iommu_page_unmap(struct vaccel *vaccel, u64 gva)
+void vaccel_iommu_page_unmap(struct vaccel *vaccel, u64 gva);
 
 void dump_paccels(struct fisor *fisor);
 
 void vaccel_create_config_space(struct vaccel *vaccel);
 void do_paccel_soft_reset(struct paccel *paccel);
 void do_vaccel_bar_cleanup(struct vaccel *vaccel);
+int vaccel_handle_bar2_write(struct vaccel *vaccel,
+                u32 offset, u64 val);
+
+int vaccel_group_notifier(struct notifier_block *nb,
+            long unsigned int action, void *data);
 
 #define fisor_err(fmt, args...) \
     pr_err("fisor: "fmt, ##args);
