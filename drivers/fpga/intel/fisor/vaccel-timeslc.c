@@ -364,7 +364,7 @@ static int vaccel_time_slicing_soft_reset(struct vaccel *vaccel)
     return 0;
 }
 
-struct paccel_ops paccel_slicing_ops = {
+struct paccel_ops paccel_time_slicing_ops = {
     .vaccel_init = vaccel_time_slicing_init,
     .vaccel_uinit = vaccel_time_slicing_uinit,
     .dump = paccel_timeslc_dump,
