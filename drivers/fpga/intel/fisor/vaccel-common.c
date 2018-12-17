@@ -10,31 +10,31 @@ int vaccel_iommu_page_map(struct vaccel *vaccel,
     struct iommu_domain *domain = vaccel->fisor->domain;
     int flags = vaccel->fisor->iommu_map_flags;
 
-    printk("fisor: iommu map gva %llx to gpa %llx\n", gva, gpa);
+    fisor_info("%s: iommu map gva %llx to gpa %llx\n", __func__, gva, gpa);
 
     /* add to IOMMU */
     if ((gva & 0xfff) != 0) {
-        printk("fisor: %s err gva not aligned\n", __func__);
+        vaccel_info(vaccel, "%s: err gva not aligned\n", __func__);
         gva &= (~0xfff);
     }
 
     if ((vaccel->iova_start & 0xfff) != 0) {
-        printk("fisor: %s err iova_start not aligned\n", __func__);
+        vaccel_info(vaccel, "%s: err iova_start not aligned\n", __func__);
         vaccel->iova_start &= (~0xfff);
     }
 
     if (gva >= vaccel->gva_start + SIZE_64G) {
-        printk("fisor: %s err gva too large\n", __func__);
+        vaccel_info(vaccel, "%s: err gva too large\n", __func__);
         return -EINVAL;
     }
 
     gva = gva - vaccel->gva_start + vaccel->iova_start;
     if (iommu_iova_to_phys(domain, gva)) {
         iommu_unmap(domain, gva, PAGE_SIZE);
-        printk("vaccel: %s clear already mapped\n", __func__);
+        vaccel_info(vaccel, "%s: clear already mapped\n", __func__);
     }
 
-    printk("vaccel: iommu_map %llx ==> %llx ==> %llx\n", gva, gpa, pfn << PAGE_SHIFT);
+    vaccel_info(vaccel, "iommu_map %llx ==> %llx ==> %llx\n", gva, gpa, pfn << PAGE_SHIFT);
 
     return iommu_map(vaccel->fisor->domain, gva,
                         pfn << PAGE_SHIFT, PAGE_SIZE, flags);
@@ -47,17 +47,17 @@ void vaccel_iommu_page_unmap(struct vaccel *vaccel, u64 gva)
     struct iommu_domain *domain = vaccel->fisor->domain;
 
     if ((gva & 0xfff) != 0) {
-        printk("fisor: %s err gva not aligned\n", __func__);
+        vaccel_info(vaccel, "%s: err gva not aligned\n", __func__);
         gva &= (~0xfff);
     }
 
     if ((vaccel->iova_start & 0xfff) != 0) {
-        printk("fisor: %s err iova_start not aligned\n", __func__);
+        vaccel_info(vaccel, "%s: err iova_start not aligned\n", __func__);
         vaccel->iova_start &= (~0xfff);
     }
 
     if (gva >= vaccel->iova_start + SIZE_64G) {
-        printk("fisor: %s err gva too large\n", __func__);
+        vaccel_info(vaccel, "%s: err gva too large\n", __func__);
         return;
     }
 
@@ -69,7 +69,7 @@ void vaccel_iommu_page_unmap(struct vaccel *vaccel, u64 gva)
         kvm_release_pfn_clean(pfn);
     }
     else {
-        printk("vai: %s free a unmapped page\n", __func__);
+        vaccel_info(vaccel, "%s: free a unmapped page\n", __func__);
     }
 }
 
@@ -240,11 +240,11 @@ int vaccel_group_notifier(struct notifier_block *nb,
         vaccel->kvm = data;
 
         if (!data) {
-            printk("vaccel: set KVM null\n");
+            vaccel_info(vaccel, "set KVM null\n");
             return NOTIFY_BAD;
         }
         else {
-            printk("vaccel: set KVM success\n");
+            vaccel_info(vaccel, "set KVM success\n");
         }
     }
     return NOTIFY_OK;

@@ -8,7 +8,7 @@ static int paccel_direct_dump(struct paccel *paccel)
     u32 mmio_size = paccel->mmio_size;
     bool occupied = paccel->direct.occupied;
 
-    printk("fisor: phys accelerator #%d, mmio %x, mmio_size %x, occupied %s\n",
+    paccel_info(paccel, "phys accelerator #%d, mmio %x, mmio_size %x, occupied %s\n",
                 accel_id, mmio_start, mmio_size, occupied?"true":"false");
 
     return 0;

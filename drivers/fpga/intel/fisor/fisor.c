@@ -10,13 +10,13 @@ void dump_paccels(struct fisor *fisor)
     int i;
 
     if (!fisor) {
-        printk("fisor: %s failed\n", __func__);
+        fisor_info("%s: failed\n", __func__);
         return;
     }
     
     paccels = fisor->paccels;
     if (!paccels) {
-        printk("fisor: paccels empty\n");
+        fisor_info("%s: paccels empty\n", __func__);
         return;
     }
 
@@ -29,7 +29,7 @@ void dump_paccels(struct fisor *fisor)
 static int fisor_iommu_fault_handler(struct iommu_domain *domain,
             struct device *dev, unsigned long iova, int flags, void *arg)
 {
-    pr_err("fisor: iommu page fault at %lx\n", iova);
+    fisor_err("iommu page fault at %lx\n", iova);
     return 0;
 }
 
@@ -153,7 +153,7 @@ static inline void vaccel_write_cfg_bar(struct vaccel *vaccel, u32 offset,
 
     if (low) {
         *pval = (val & GENMASK(31, 4)) | (*pval & GENMASK(3, 0));
-        pr_info("vaccel: write value %x\n", *pval);
+        vaccel_info(vaccel, "vaccel: write value %x\n", *pval);
     }
     else {
         *pval = val;
@@ -206,7 +206,7 @@ static void handle_pci_cfg_write(struct vaccel *vaccel, u32 offset,
         STORE_LE32(&vaccel->vconfig[offset], 0);
         break;
     default:
-        pr_info("vaccel: cfg write @0x%x of %d bytes not handled\n",
+        vaccel_info(vaccel, "cfg write @0x%x of %d bytes not handled\n",
                     offset, count);
         break;
     }
@@ -262,7 +262,7 @@ static ssize_t vaccel_access(struct mdev_device *mdev, char *buf, size_t count,
 
     vaccel = mdev_get_drvdata(mdev);
 	if (!vaccel) {
-		pr_err("%s vaccel not found\n", __func__);
+		vaccel_err(vaccel, "%s vaccel not found\n", __func__);
 		return -EINVAL;
 	}
 
@@ -273,7 +273,7 @@ static ssize_t vaccel_access(struct mdev_device *mdev, char *buf, size_t count,
 	switch (index) {
 	case VFIO_PCI_CONFIG_REGION_INDEX:
 
-		pr_info("%s: PCI config space %s at offset 0x%llx\n",
+		vaccel_info(vaccel, "%s: PCI config space %s at offset 0x%llx\n",
 			 __func__, is_write ? "write" : "read", offset);
 
 		if (is_write) {
@@ -288,7 +288,7 @@ static ssize_t vaccel_access(struct mdev_device *mdev, char *buf, size_t count,
 
 	case VFIO_PCI_BAR0_REGION_INDEX ... VFIO_PCI_BAR5_REGION_INDEX:
 
-        pr_info("%s: BAR %d %s at offset 0x%llx size %ld\n", __func__,
+        vaccel_info(vaccel, "%s: BAR %d %s at offset 0x%llx size %ld\n", __func__,
             index - VFIO_PCI_BAR0_REGION_INDEX, is_write ? "write" : "read",
             offset, count);
 
@@ -551,7 +551,7 @@ static int vaccel_reset(struct mdev_device *mdev)
     if (!vaccel)
         return -EINVAL;
 
-    pr_info("vaccel: %s\n", __func__);
+    vaccel_info(vaccel, "call: %s\n", __func__);
 
     vaccel_close(mdev);
 
@@ -654,7 +654,7 @@ static long vaccel_ioctl(struct mdev_device *mdev, unsigned int cmd,
 	case VFIO_DEVICE_SET_IRQS:
 	{
         /* current not supported */
-        pr_err("vaccel: set irqs is not implemented!\n");
+        vaccel_err(vaccel, "set irqs is not implemented!\n");
 		return 0;
 	}
 	case VFIO_DEVICE_RESET:
@@ -920,7 +920,7 @@ static int fisor_iommu_init(struct fisor *fisor,
 
     fisor->domain = iommu_domain_alloc(&pci_bus_type);
     if (!fisor->domain) {
-        printk("fisor: failed to alloc iommu_domain\n");
+        fisor_info("failed to alloc iommu_domain\n");
         return -1;
     }
 
@@ -929,16 +929,16 @@ static int fisor_iommu_init(struct fisor *fisor,
         fisor->iommu_map_flags |= IOMMU_CACHE;
     }
     else {
-        printk("fisor: no iommu cache choerency support\n");
+        fisor_info("no iommu cache choerency support\n");
     }
 
     if (iommu_attach_device(fisor->domain,
                     pdev->dev.parent->parent)) {
-        printk("fisor: attach devcice failed\n");
+        fisor_info("attach devcice failed\n");
         return -1;
     }
     else {
-        printk("fisor: attach device success\n");
+        fisor_info("attach device success\n");
     }
 
     iommu_set_fault_handler(fisor->domain,
@@ -973,7 +973,7 @@ int fpga_register_afu_mdev_device(struct platform_device *pdev)
     u32 ndirect, nts;
     u64 guidl, guidh;
 
-    printk("vaccel: registering!\n");
+    fisor_info("registering!\n");
 
     mutex_lock(&pdata->lock);
 	if (pdata->disable_count) {
@@ -985,11 +985,11 @@ int fpga_register_afu_mdev_device(struct platform_device *pdev)
 	mutex_unlock(&pdata->lock);
 
 	scnprintf(buf, PAGE_SIZE, "%016llx%016llx", guidh, guidl);
-    printk("fisor: %s, phy afu id %s\n", __func__, buf);
+    fisor_info("%s: phy afu id %s\n", __func__, buf);
 
     if (guidh != FISOR_GUID_HI ||
             guidl != FISOR_GUID_LO) {
-        printk("fisor: not fisor hardware\n");
+        fisor_info("not fisor hardware\n");
         return -EINVAL;
     }
 

@@ -9,7 +9,7 @@ static int paccel_timeslc_dump(struct paccel *paccel)
     u32 avail_inst = paccel->timeslc.total;
     u32 curr_inst = paccel->timeslc.occupied;
 
-    printk("fisor: phys accelerator #%d, mmio %x, mmio_size %x, avail %d, curr %d\n",
+    paccel_info(paccel, "fisor: phys accelerator #%d, mmio %x, mmio_size %x, avail %d, curr %d\n",
                 accel_id, mmio_start, mmio_size, avail_inst, curr_inst);
 
     return 0;
@@ -324,7 +324,7 @@ static int vaccel_time_slicing_open(struct mdev_device *mdev)
     unsigned long events;
     struct vaccel *vaccel = mdev_get_drvdata(mdev);
 
-    pr_info("vaccel: %s\n", __func__);
+    vaccel_info(vaccel, "call: %s\n", __func__);
 
     vaccel->group_notifier.notifier_call = vaccel_group_notifier;
 

@@ -8,7 +8,7 @@ void dump_buffer_32(char *buf, uint32_t count)
 
     for (i = 0; i < count; i+=4) {
         x = (uint32_t*)(buf+i);
-        pr_info("buffer: %x\n", *x);
+        fisor_info("buffer: %x\n", *x);
     }
 }
 
@@ -19,7 +19,7 @@ void dump_buffer_64(char *buf, uint32_t count)
 
     for (i = 0; i < count; i+=8) {
         x = (uint64_t*)(buf+i);
-        pr_info("buffer: %llx\n", *x);
+        fisor_info("buffer: %llx\n", *x);
     }
 }
 
@@ -44,7 +44,7 @@ struct paccel* kobj_to_paccel(struct kobject *kobj,
                         fisor->paccels[i].mode_id);
         }
 
-        printk("fisor: scan %s\n", name);
+        fisor_info("%s: scan %s\n", __func__, name);
 
         if (!strcmp(kobj->name, name)) {
             *mode = fisor->paccels[i].mode;
@@ -68,7 +68,7 @@ struct fisor* mdev_to_fisor(struct mdev_device *mdev)
     mutex_lock(&fisor_list_lock);
     list_for_each_entry_safe(d, tmp_d, &fisor_list, next) {
         if (d->pafu_device == mdev_parent_dev(mdev)) {
-            printk("fisor: %s found fisor\n", __func__);
+            fisor_info("%s: found fisor\n", __func__);
             ret = d;
             break;
         }
@@ -84,7 +84,7 @@ void iommu_unmap_region(struct iommu_domain *domain,
     long idx, idx_end;
     u64 cnt = 0;
 
-    printk("vaccel: unmap iommu region start %llx pages %llx\n", start, npages);
+    fisor_info("unmap iommu region start %llx pages %llx\n", start, npages);
 
     idx = start;
     idx_end = start + npages * PAGE_SIZE;
@@ -95,7 +95,7 @@ void iommu_unmap_region(struct iommu_domain *domain,
         }
     }
 
-    printk("vaccel: unmap %lld pages\n", cnt);
+    fisor_info("unmap %lld pages\n", cnt);
 }
 
 struct fisor* pdev_to_fisor(struct platform_device *pdev)
@@ -107,7 +107,7 @@ struct fisor* pdev_to_fisor(struct platform_device *pdev)
     mutex_lock(&fisor_list_lock);
     list_for_each_entry_safe(d, tmp_d, &fisor_list, next) {
         if (d->pafu_device == pafu) {
-            printk("fisor: %s found fisor\n", __func__);
+            fisor_info("%s: found fisor\n", __func__);
             ret = d;
             break;
         }
@@ -125,7 +125,7 @@ struct fisor* device_to_fisor(struct device *pafu)
     mutex_lock(&fisor_list_lock);
     list_for_each_entry_safe(d, tmp_d, &fisor_list, next) {
         if (d->pafu_device == pafu) {
-            printk("fisor: %s found fisor\n", __func__);
+            fisor_info("%s: found fisor\n", __func__);
             ret = d;
             break;
         }
