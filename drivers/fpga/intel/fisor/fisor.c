@@ -900,7 +900,7 @@ static int fisor_probe(struct fisor *fisor, u32 *ndirect, u32 *nts)
         fisor->paccels[i].mmio_start = 0x100*(i+1);
         fisor->paccels[i].mmio_size = 0x100;
 
-        fisor->paccels[i].direct.occupied = true;
+        fisor->paccels[i].direct.occupied = false;
 
         fisor->paccels[i].fisor = fisor;
         fisor->paccels[i].ops = &paccel_direct_ops;
