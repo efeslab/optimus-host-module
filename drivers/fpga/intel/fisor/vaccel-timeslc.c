@@ -240,7 +240,7 @@ static int vaccel_time_slicing_handle_mmio_read(struct vaccel *vaccel,
         return -EINVAL;
     }
 
-    if (index % 0x8 != 0) {
+    if (offset % 0x8 != 0) {
         vaccel_err(vaccel, "MMIO not 8 bytes aligned");
         return -EINVAL;
     }
@@ -281,7 +281,7 @@ static int vaccel_time_slicing_handle_mmio_write(struct vaccel *vaccel,
         return -EINVAL;
     }
 
-    if (index % 0x8 != 0) {
+    if (offset % 0x8 != 0) {
         vaccel_err(vaccel, "MMIO not 8 bytes aligned");
         return -EINVAL;
     }
