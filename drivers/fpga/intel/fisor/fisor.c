@@ -903,6 +903,7 @@ static int fisor_probe(struct fisor *fisor, u32 *ndirect, u32 *nts)
         fisor->paccels[i].direct.occupied = true;
 
         fisor->paccels[i].fisor = fisor;
+        fisor->paccels[i].ops = paccel_direct_ops;
 
         mutex_init(&fisor->paccels[i].ops_lock);
     }
