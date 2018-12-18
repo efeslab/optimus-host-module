@@ -169,6 +169,8 @@ static void do_vaccel_time_slicing(struct fisor *fisor)
     u32 npaccels;
     int i;
 
+    fisor_info("%s", __func__);
+
     mutex_lock(&fisor->ops_lock);
 
     paccels = fisor->paccels;
@@ -187,12 +189,19 @@ static void do_vaccel_time_slicing(struct fisor *fisor)
         ptr = paccel->timeslc.curr;
         if (ptr) {
             if (ptr->enabled == false) {
+                fisor_info("slicing: curr vaccel %d not enabled",
+                            ptr->seq_id);
                 continue;
             }
+
+            fisor_info("slicing: curr vaccel %d", ptr->seq_id);
 
             if (ptr->timeslc.trans_status ==
                         VACCEL_TRANSACTION_HARDWARE) {
                 if (fisor_hw_check_trans_finished(paccel)) {
+                    fisor_info("slicing: curr vaccel %d finished",
+                                    ptr->seq_id);
+
                     /* the transaction is finished */
                     ptr->timeslc.trans_status = VACCEL_TRANSACTION_IDLE;
                     STORE_LE64((u64*)&ptr->bar[VACCEL_BAR_0][0x18], 0x2);
@@ -201,26 +210,33 @@ static void do_vaccel_time_slicing(struct fisor *fisor)
                 }
                 else {
                     /* the transacetion is unfinished, skip */
+                    fisor_info("slicing: curr vaccel %d still running",
+                                    ptr->seq_id);
                     continue;
                 }
             }
+        }
+        else {
+            fisor_info("slicing: curr vaccel NULL");
         }
 
         round = ptr;
 
         do {
             if (!ptr) {
+                fisor_info("slicing: round");
                 ptr = list_first_entry(&paccel->timeslc.children,
                                 struct vaccel, timeslc.paccel_next);
             }
 
             if (ptr->timeslc.trans_status
                         == VACCEL_TRANSACTION_STARTED) {
+                fisor_info("slicing: vaccel %d selected", ptr->seq_id);
                 vaccel_time_slicing_submit(ptr);
                 ptr->timeslc.trans_status = VACCEL_TRANSACTION_HARDWARE;
-
-                ptr = list_next_entry(ptr, timeslc.paccel_next);
             }
+
+            ptr = list_next_entry(ptr, timeslc.paccel_next);
         } while (ptr != round);
 
         mutex_unlock(&paccel->ops_lock);
