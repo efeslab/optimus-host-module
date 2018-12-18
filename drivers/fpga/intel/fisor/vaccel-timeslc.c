@@ -356,6 +356,8 @@ static int vaccel_time_slicing_close(struct mdev_device *mdev)
 
     do_vaccel_bar_cleanup(vaccel);
 
+    vaccel_info(vaccel, "closed");
+
     return 0;
 }
 

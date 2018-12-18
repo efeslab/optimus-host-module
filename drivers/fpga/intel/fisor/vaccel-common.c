@@ -270,9 +270,10 @@ void do_paccel_soft_reset(struct paccel *paccel)
 
 void do_vaccel_bar_cleanup(struct vaccel *vaccel)
 {
-    WARN_ON(vaccel);
-    WARN_ON(vaccel->bar);
+    WARN_ON(vaccel == NULL);
+    WARN_ON(vaccel->bar == NULL);
 
-    memset(vaccel->bar, 0, FISOR_BAR_0_SIZE);
+    memset(vaccel->bar[VACCEL_BAR_0], 0, FISOR_BAR_0_SIZE);
+    memset(vaccel->bar[VACCEL_BAR_2], 0, FISOR_BAR_2_SIZE);
 }
 

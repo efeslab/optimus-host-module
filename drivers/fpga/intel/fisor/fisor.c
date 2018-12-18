@@ -557,7 +557,7 @@ static int vaccel_reset(struct mdev_device *mdev)
 
     memset(vaccel->vconfig, 0, FISOR_CONFIG_SPACE_SIZE);
     memset(vaccel->bar[VACCEL_BAR_0], 0, FISOR_BAR_0_SIZE);
-    memset(vaccel->bar[VACCEL_BAR_2], 0, FISOR_BAR_0_SIZE);
+    memset(vaccel->bar[VACCEL_BAR_2], 0, FISOR_BAR_2_SIZE);
 
     vaccel_create_config_space(vaccel);
     vaccel->gva_start = 0;
