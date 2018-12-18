@@ -226,7 +226,7 @@ static void do_vaccel_time_slicing(struct fisor *fisor)
         mutex_unlock(&paccel->ops_lock);
     }
 
-    mutex_lock(&fisor->ops_lock);
+    mutex_unlock(&fisor->ops_lock);
 }
 
 static int vaccel_time_slicing_handle_mmio_read(struct vaccel *vaccel,
