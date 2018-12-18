@@ -235,14 +235,26 @@ static void do_vaccel_time_slicing(struct fisor *fisor)
                 vaccel_time_slicing_submit(ptr);
                 ptr->timeslc.trans_status = VACCEL_TRANSACTION_HARDWARE;
             }
+            else {
+                fisor_info("slicing: vaccel %d empty, skipped", ptr->seq_id);
+            }
 
             ptr = list_next_entry(ptr, timeslc.paccel_next);
+
+            if (!ptr) {
+                fisor_info("slicing: end of list");
+            }
+            else {
+                fisor_info("slicing: next vaccel %d", ptr->seq_id);
+            }
         } while (ptr != round);
 
         mutex_unlock(&paccel->ops_lock);
     }
 
     mutex_unlock(&fisor->ops_lock);
+
+    fisor_info("%s exit", __func__);
 }
 
 static int vaccel_time_slicing_handle_mmio_read(struct vaccel *vaccel,
