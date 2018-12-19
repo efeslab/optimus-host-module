@@ -56,7 +56,7 @@ void vaccel_iommu_page_unmap(struct vaccel *vaccel, u64 gva)
         vaccel->iova_start &= (~0xfff);
     }
 
-    if (gva >= vaccel->iova_start + SIZE_64G) {
+    if (gva >= vaccel->gva_start + SIZE_64G) {
         vaccel_info(vaccel, "%s: err gva too large\n", __func__);
         return;
     }
