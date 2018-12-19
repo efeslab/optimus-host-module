@@ -144,7 +144,7 @@ static int vaccel_time_slicing_submit(struct vaccel *vaccel)
     writeq(mux_offset, &fisor->pafu_mmio[vm_cfg_offset]);
 
     /* reset the accelerator */
-    do_paccel_soft_reset(paccel);
+    do_paccel_soft_reset(paccel, false);
 
     /* fill all the registers again */
     for (idx=0x20; idx<0x100; idx+=8) {

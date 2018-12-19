@@ -187,7 +187,7 @@ static int vaccel_direct_open(struct mdev_device *mdev)
     /* set using to true */
     vaccel->enabled = true;
 
-    do_paccel_soft_reset(paccel);
+    do_paccel_soft_reset(paccel, true);
 
     return 0;
 }
@@ -212,7 +212,7 @@ static int vaccel_direct_close(struct mdev_device *mdev)
 static int vaccel_direct_soft_reset(struct vaccel *vaccel)
 {
     /* to soft reset we write a special register */
-    do_paccel_soft_reset(vaccel->paccel);
+    do_paccel_soft_reset(vaccel->paccel, true);
     return 0;
 }
 

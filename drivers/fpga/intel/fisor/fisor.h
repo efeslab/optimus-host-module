@@ -222,7 +222,7 @@ void vaccel_iommu_page_unmap(struct vaccel *vaccel, u64 gva);
 void dump_paccels(struct fisor *fisor);
 
 void vaccel_create_config_space(struct vaccel *vaccel);
-void do_paccel_soft_reset(struct paccel *paccel);
+void do_paccel_soft_reset(struct paccel *paccel, bool lock);
 void do_vaccel_bar_cleanup(struct vaccel *vaccel);
 int vaccel_handle_bar2_write(struct vaccel *vaccel,
                 u32 offset, u64 val);

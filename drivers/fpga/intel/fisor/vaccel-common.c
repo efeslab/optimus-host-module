@@ -250,7 +250,7 @@ int vaccel_group_notifier(struct notifier_block *nb,
     return NOTIFY_OK;
 }
 
-void do_paccel_soft_reset(struct paccel *paccel)
+void do_paccel_soft_reset(struct paccel *paccel, bool lock)
 {
     u64 reset_flags, new_reset_flags;
     struct fisor *fisor;
@@ -259,13 +259,19 @@ void do_paccel_soft_reset(struct paccel *paccel)
 
     fisor = paccel->fisor;
 
-    mutex_lock(&fisor->ops_lock);
+    if (lock) {
+        mutex_lock(&fisor->ops_lock);
+    }
+
     reset_flags = readq(&fisor->pafu_mmio[0x18]);
     new_reset_flags = reset_flags |
             (1 << paccel->accel_id);
     writeq(new_reset_flags, &fisor->pafu_mmio[0x18]);
     writeq(reset_flags, &fisor->pafu_mmio[0x18]);
-    mutex_unlock(&fisor->ops_lock);
+
+    if (lock) {
+        mutex_unlock(&fisor->ops_lock);
+    }
 }   
 
 void do_vaccel_bar_cleanup(struct vaccel *vaccel)
