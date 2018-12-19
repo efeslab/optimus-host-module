@@ -178,7 +178,7 @@ static void do_vaccel_time_slicing(struct fisor *fisor)
 
     for (i=0; i<npaccels; i++) {
         struct paccel *paccel = &paccels[i];
-        struct vaccel *ptr = NULL, *round = NULL;
+        struct vaccel *ptr = NULL, *round = NULL, *last = NULL;
 
         if (paccel->mode == VACCEL_TYPE_DIRECT) {
             continue;
@@ -186,6 +186,8 @@ static void do_vaccel_time_slicing(struct fisor *fisor)
 
         mutex_lock(&paccel->ops_lock);
 
+        last = list_last_entry(&paccel->timeslc.children,
+                    struct vaccel, timeslc.paccel_next);
         ptr = paccel->timeslc.curr;
         if (ptr) {
             if (ptr->enabled == false) {
@@ -206,7 +208,14 @@ static void do_vaccel_time_slicing(struct fisor *fisor)
                     ptr->timeslc.trans_status = VACCEL_TRANSACTION_IDLE;
                     STORE_LE64((u64*)&ptr->bar[VACCEL_BAR_0][0x18], 0x2);
 
-                    ptr = list_next_entry(ptr, timeslc.paccel_next);
+                    round = ptr;
+                    if (ptr == last) {
+                        ptr = list_first_entry(&paccel->timeslc.children,
+                                    struct vaccel, timeslc.paccel_next);
+                    }
+                    else {
+                        ptr = list_next_entry(ptr, timeslc.paccel_next);
+                    }
                 }
                 else {
                     /* the transacetion is unfinished, skip */
@@ -218,17 +227,12 @@ static void do_vaccel_time_slicing(struct fisor *fisor)
         }
         else {
             fisor_info("slicing: curr vaccel NULL");
+            ptr = list_first_entry(&paccel->timeslc.children,
+                        struct vaccel, timeslc.paccel_next);
+            round = ptr;
         }
 
-        round = ptr;
-
         do {
-            if (!ptr) {
-                fisor_info("slicing: round");
-                ptr = list_first_entry(&paccel->timeslc.children,
-                                struct vaccel, timeslc.paccel_next);
-            }
-
             if (ptr->timeslc.trans_status
                         == VACCEL_TRANSACTION_STARTED) {
                 fisor_info("slicing: vaccel %d selected", ptr->seq_id);
@@ -239,13 +243,12 @@ static void do_vaccel_time_slicing(struct fisor *fisor)
                 fisor_info("slicing: vaccel %d empty, skipped", ptr->seq_id);
             }
 
-            ptr = list_next_entry(ptr, timeslc.paccel_next);
-
-            if (!ptr) {
-                fisor_info("slicing: end of list");
+            if (ptr == last) {
+                ptr = list_first_entry(&paccel->timeslc.children,
+                            struct vaccel, timeslc.paccel_next);
             }
             else {
-                fisor_info("slicing: next vaccel %d", ptr->seq_id);
+                ptr = list_next_entry(ptr, timeslc.paccel_next);
             }
         } while (ptr != round);
 
