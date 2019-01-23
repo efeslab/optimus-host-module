@@ -897,8 +897,8 @@ static int fisor_probe(struct fisor *fisor, u32 *ndirect, u32 *nts)
         fisor->paccels[i].mode = VACCEL_TYPE_TIME_SLICING;
         fisor->paccels[i].mode_id = i;
         fisor->paccels[i].accel_id = i;
-        fisor->paccels[i].mmio_start = 0x100*(i+1);
-        fisor->paccels[i].mmio_size = 0x100;
+        fisor->paccels[i].mmio_start = 0x1000*(i+1);
+        fisor->paccels[i].mmio_size = 0x1000;
 
         fisor->paccels[i].timeslc.total = 5;
         fisor->paccels[i].timeslc.occupied = 0;

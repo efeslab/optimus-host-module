@@ -44,7 +44,6 @@
 #define FISOR_STRING_LEN		64
 
 #define FISOR_CONFIG_SPACE_SIZE  0xff
-#define FISOR_MMIO_BAR_SIZE      0x100000
 
 #define LOAD_LE16(addr, val)   (val = *(u16 *)addr)
 #define LOAD_LE32(addr, val)   (val = *(u32 *)addr)
@@ -84,7 +83,7 @@ struct fisor {
 
 #define SIZE_64G (64*1024*1024*1024LLU)
 
-#define FISOR_BAR_0_SIZE 0x100
+#define FISOR_BAR_0_SIZE 0x1000
 #define FISOR_BAR_2_SIZE 0x100
 #define FISOR_BAR_0_MASK ~(FISOR_BAR_0_SIZE - 1)
 #define FISOR_BAR_2_MASK ~(FISOR_BAR_2_SIZE - 1)

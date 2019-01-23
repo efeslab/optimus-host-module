@@ -147,7 +147,7 @@ static int vaccel_time_slicing_submit(struct vaccel *vaccel)
     do_paccel_soft_reset(paccel, false);
 
     /* fill all the registers again */
-    for (idx=0x20; idx<0x100; idx+=8) {
+    for (idx=0x20; idx<0x1000; idx+=8) {
         data64 = *(u64*)(vaccel->bar[VACCEL_BAR_0]+idx);
         if (data64 != 0) {
             writeq(data64, &mmio_base[idx]);
