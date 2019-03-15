@@ -894,25 +894,22 @@ static int fisor_probe(struct fisor *fisor, u32 *ndirect, u32 *nts)
 
     for (i=0; i<npaccels; i++) {
         /* TODO: match the magic */
-        fisor->paccels[i].mode = VACCEL_TYPE_TIME_SLICING;
+        fisor->paccels[i].mode = VACCEL_TYPE_DIRECT;
         fisor->paccels[i].mode_id = i;
         fisor->paccels[i].accel_id = i;
         fisor->paccels[i].mmio_start = 0x1000*(i+1);
         fisor->paccels[i].mmio_size = 0x1000;
 
-        fisor->paccels[i].timeslc.total = 5;
-        fisor->paccels[i].timeslc.occupied = 0;
-        INIT_LIST_HEAD(&fisor->paccels[i].timeslc.children);
-        fisor->paccels[i].timeslc.curr = NULL;
+        fisor->paccels[i].direct.occupied = false;
 
         fisor->paccels[i].fisor = fisor;
-        fisor->paccels[i].ops = &paccel_time_slicing_ops;
+        fisor->paccels[i].ops = &paccel_direct_ops;
 
         mutex_init(&fisor->paccels[i].ops_lock);
     }
 
-    *ndirect = 0;
-    *nts = 3;
+    *ndirect = npaccels;
+    *nts = 0;
 
     return 0;
 }
