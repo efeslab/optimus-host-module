@@ -29,6 +29,7 @@
 #include <linux/platform_device.h>
 #include <linux/iommu.h>
 #include <linux/kthread.h>
+#include <linux/delay.h>
 #include <linux/atomic.h>
 
 
@@ -79,6 +80,8 @@ struct fisor {
 
     u32 npaccels;
     struct paccel *paccels;
+
+    struct task_struct *scheduler;
 };
 
 #define SIZE_64G (64*1024*1024*1024LLU)
@@ -91,6 +94,10 @@ struct fisor {
 #define FISOR_GUID_HI 0xd1d383aaca4c4c60
 #define FISOR_GUID_LO 0xa0a013a421139e69
 #define FISOR_MAGIC 0xfffff
+
+#define FISOR_TRANS_CTL 0x18
+#define FISOR_TRANS_CTL_IDLE 0
+#define FISOR_TRANS_CTL_BUSY 1
 
 enum {
     VACCEL_BAR_0,
@@ -188,6 +195,8 @@ struct vaccel {
         struct {
             struct list_head paccel_next;
             vaccel_trans_stat_t trans_status;
+            u64 start_time;
+            u64 running_time;
         } timeslc;
     };
 
@@ -228,6 +237,8 @@ int vaccel_handle_bar2_write(struct vaccel *vaccel,
 
 int vaccel_group_notifier(struct notifier_block *nb,
             long unsigned int action, void *data);
+
+int kthread_watch_time(void *fisor_param);
 
 #define fisor_err(fmt, args...) \
     pr_err("fisor: "fmt, ##args);
