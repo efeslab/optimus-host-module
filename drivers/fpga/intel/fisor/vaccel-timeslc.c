@@ -239,18 +239,20 @@ static void do_vaccel_time_slicing(struct fisor *fisor)
                 vaccel_time_slicing_submit(ptr);
                 ptr->timeslc.trans_status = VACCEL_TRANSACTION_HARDWARE;
                 paccel->timeslc.curr = ptr;
-                break;
             }
             else {
                 fisor_info("slicing: vaccel %d empty, skipped", ptr->seq_id);
+                fisor_info("ptr: %#llx, round: %#llx\n", ptr, round);
             }
 
             if (ptr == last) {
                 ptr = list_first_entry(&paccel->timeslc.children,
                             struct vaccel, timeslc.paccel_next);
+                fisor_info("ptr: %#llx, round: %#llx\n", ptr, round);
             }
             else {
                 ptr = list_next_entry(ptr, timeslc.paccel_next);
+                fisor_info("ptr: %#llx, round: %#llx\n", ptr, round);
             }
         } while (ptr != round);
 

@@ -164,7 +164,7 @@ int vaccel_handle_bar2_write(struct vaccel *vaccel, u32 offset, u64 val)
     case 0x0: /* PAGING_NOTIFY_MAP_ADDR */
     {
         vaccel->paging_notifier_gpa = val;
-        vaccel_info(vaccel, "set paging notifier addr gpa %llx", val);
+        //vaccel_info(vaccel, "set paging notifier addr gpa %llx", val);
         break;
     }
     case 0x8: /* PAGING_NOTIFY_MAP */
@@ -186,8 +186,8 @@ int vaccel_handle_bar2_write(struct vaccel *vaccel, u32 offset, u64 val)
             return ret;
         }
 
-        vaccel_info(vaccel, "paging notifier: %llx, va %llx, pa %llx",
-                    vaccel->paging_notifier_gpa, notifier.va, notifier.pa);
+        //vaccel_info(vaccel, "paging notifier: %llx, va %llx, pa %llx",
+        //            vaccel->paging_notifier_gpa, notifier.va, notifier.pa);
 
         /* we have to hold the srcu since the following function 
          * will go through address translation */

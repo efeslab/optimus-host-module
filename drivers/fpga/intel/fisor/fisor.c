@@ -288,9 +288,9 @@ static ssize_t vaccel_access(struct mdev_device *mdev, char *buf, size_t count,
 
 	case VFIO_PCI_BAR0_REGION_INDEX ... VFIO_PCI_BAR5_REGION_INDEX:
 
-        vaccel_info(vaccel, "%s: BAR %d %s at offset 0x%llx size %ld\n", __func__,
-            index - VFIO_PCI_BAR0_REGION_INDEX, is_write ? "write" : "read",
-            offset, count);
+        //vaccel_info(vaccel, "%s: BAR %d %s at offset 0x%llx size %ld\n", __func__,
+        //    index - VFIO_PCI_BAR0_REGION_INDEX, is_write ? "write" : "read",
+        //    offset, count);
 
 		if (is_write) {
 			dump_buffer_64(buf, count);
