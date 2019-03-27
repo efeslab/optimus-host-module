@@ -145,6 +145,7 @@ static int vaccel_time_slicing_submit(struct vaccel *vaccel)
 
     /* reset the accelerator */
     do_paccel_soft_reset(paccel, false);
+    paccel->timeslc.curr = vaccel;
 
     /* fill all the registers again */
     for (idx=0x20; idx<0x1000; idx+=8) {
