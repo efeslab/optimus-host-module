@@ -75,13 +75,13 @@ int vaccel_create(struct kobject *kobj, struct mdev_device *mdev)
     mutex_unlock(&fisor->ops_lock);
 
     /* dump result */
-    vaccel_info(vaccel,
-            "vaccel created. seq_id %x, mode %s, mode_id %d, gva_start %llx\n",
-            vaccel->seq_id,
-            vaccel->mode==VACCEL_TYPE_DIRECT?"direct":"timeslicing",
-            vaccel->paccel->mode_id,
-            vaccel->gva_start);
-    dump_paccels(fisor);
+    //vaccel_info(vaccel,
+    //        "vaccel created. seq_id %x, mode %s, mode_id %d, gva_start %llx\n",
+    //        vaccel->seq_id,
+    //        vaccel->mode==VACCEL_TYPE_DIRECT?"direct":"timeslicing",
+    //        vaccel->paccel->mode_id,
+    //        vaccel->gva_start);
+    //dump_paccels(fisor);
 
     return 0;
 }
@@ -153,7 +153,7 @@ static inline void vaccel_write_cfg_bar(struct vaccel *vaccel, u32 offset,
 
     if (low) {
         *pval = (val & GENMASK(31, 4)) | (*pval & GENMASK(3, 0));
-        vaccel_info(vaccel, "vaccel: write value %x\n", *pval);
+        //vaccel_info(vaccel, "vaccel: write value %x\n", *pval);
     }
     else {
         *pval = val;
@@ -322,7 +322,7 @@ ssize_t vaccel_read(struct mdev_device *mdev, char __user *buf, size_t count,
     int ret;
     struct vaccel *vaccel = mdev_get_drvdata(mdev);
 
-    vaccel_info(vaccel, "%s: count %lu\n", __func__, count);
+    //vaccel_info(vaccel, "%s: count %lu\n", __func__, count);
 
     while (count) {
        size_t filled;
@@ -399,7 +399,7 @@ ssize_t vaccel_write(struct mdev_device *mdev, const char __user *buf,
 	int ret;
     struct vaccel *vaccel = mdev_get_drvdata(mdev);
 
-    vaccel_info(vaccel, "%s: count %ld", __func__, count);
+    //vaccel_info(vaccel, "%s: count %ld", __func__, count);
 
 	while (count) {
 		size_t filled;
