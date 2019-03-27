@@ -10,7 +10,7 @@ int vaccel_iommu_page_map(struct vaccel *vaccel,
     struct iommu_domain *domain = vaccel->fisor->domain;
     int flags = vaccel->fisor->iommu_map_flags;
 
-    fisor_info("%s: iommu map gva %llx to gpa %llx\n", __func__, gva, gpa);
+    //fisor_info("%s: iommu map gva %llx to gpa %llx\n", __func__, gva, gpa);
 
     /* add to IOMMU */
     if ((gva & 0xfff) != 0) {
@@ -34,7 +34,7 @@ int vaccel_iommu_page_map(struct vaccel *vaccel,
         vaccel_info(vaccel, "%s: clear already mapped\n", __func__);
     }
 
-    vaccel_info(vaccel, "iommu_map %llx ==> %llx ==> %llx\n", gva, gpa, pfn << PAGE_SHIFT);
+    //vaccel_info(vaccel, "iommu_map %llx ==> %llx ==> %llx\n", gva, gpa, pfn << PAGE_SHIFT);
 
     return iommu_map(vaccel->fisor->domain, gva,
                         pfn << PAGE_SHIFT, PAGE_SIZE, flags);
