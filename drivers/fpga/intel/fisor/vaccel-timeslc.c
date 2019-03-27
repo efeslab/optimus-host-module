@@ -400,7 +400,9 @@ static int vaccel_time_slicing_close(struct mdev_device *mdev)
 static int vaccel_time_slicing_soft_reset(struct vaccel *vaccel)
 {
     struct paccel *paccel = vaccel->paccel;
+    struct fisor *fisor = paccel->fisor;
 
+    mutex_lock(&fisor->ops_lock);
     mutex_lock(&paccel->ops_lock);
 
     if (vaccel->timeslc.trans_status ==
@@ -409,13 +411,14 @@ static int vaccel_time_slicing_soft_reset(struct vaccel *vaccel)
     }
     else if (vaccel->timeslc.trans_status ==
             VACCEL_TRANSACTION_HARDWARE) {
-        do_paccel_soft_reset(paccel, true);
+        do_paccel_soft_reset(paccel, false);
         /* TODO: record running time before interrupt */
         paccel->timeslc.curr = NULL;
         vaccel->timeslc.trans_status = VACCEL_TRANSACTION_IDLE;
     }
 
     mutex_unlock(&paccel->ops_lock);
+    mutex_unlock(&fisor->ops_lock);
 
     do_vaccel_bar_cleanup(vaccel);
 
