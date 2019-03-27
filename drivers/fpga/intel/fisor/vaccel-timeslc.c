@@ -145,7 +145,6 @@ static int vaccel_time_slicing_submit(struct vaccel *vaccel)
 
     /* reset the accelerator */
     do_paccel_soft_reset(paccel, false);
-    paccel->timeslc.curr = vaccel;
 
     /* fill all the registers again */
     for (idx=0x20; idx<0x1000; idx+=8) {
@@ -239,6 +238,8 @@ static void do_vaccel_time_slicing(struct fisor *fisor)
                 fisor_info("slicing: vaccel %d selected", ptr->seq_id);
                 vaccel_time_slicing_submit(ptr);
                 ptr->timeslc.trans_status = VACCEL_TRANSACTION_HARDWARE;
+                paccel->timeslc.curr = ptr;
+                break;
             }
             else {
                 fisor_info("slicing: vaccel %d empty, skipped", ptr->seq_id);
@@ -375,6 +376,12 @@ static int vaccel_time_slicing_open(struct mdev_device *mdev)
 static int vaccel_time_slicing_close(struct mdev_device *mdev)
 {
     struct vaccel *vaccel = mdev_get_drvdata(mdev);
+    struct paccel *paccel = vaccel->paccel;
+
+    mutex_lock(&paccel->ops_lock);
+    if (paccel->timeslc.curr == vaccel)
+        paccel->timeslc.curr == NULL;
+    mutex_unlock(&paccel->ops_lock);
 
     vaccel_info(vaccel, "call: %s\n", __func__);
 
