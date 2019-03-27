@@ -113,25 +113,6 @@ static int vaccel_time_slicing_uinit(struct vaccel *vaccel)
     return ret;
 }
 
-static bool fisor_hw_check_trans_finished(struct paccel *paccel)
-{
-    u8 *mmio_base;
-    u64 data64;
-    struct fisor *fisor;
-
-    WARN_ON(paccel == NULL);
-    WARN_ON(paccel->fisor == NULL);
-
-    fisor = paccel->fisor;
-    mmio_base = fisor->pafu_mmio + paccel->mmio_start;
-    data64 = readq(&mmio_base[0x18]);
-
-    if (data64 != 0)
-        return true;
-    else
-        return false;
-}
-
 static bool fisor_hw_check_idle(struct paccel *paccel)
 {
     u8 *mmio_base;
@@ -145,7 +126,7 @@ static bool fisor_hw_check_idle(struct paccel *paccel)
     mmio_base = fisor->pafu_mmio + paccel->mmio_start;
     data64 = readq(&mmio_base[FISOR_TRANS_CTL]);
 
-    if (data64 == FISOR_TRANS_CTL_IDLE)
+    if (data64 != FISOR_TRANS_CTL_BUSY)
         return true;
     else
         return false;
@@ -184,103 +165,6 @@ static int vaccel_time_slicing_submit(struct vaccel *vaccel)
     return 0;
 }
 
-static void do_vaccel_time_slicing(struct fisor *fisor)
-{
-    struct paccel *paccels;
-    u32 npaccels;
-    int i;
-
-    fisor_info("%s", __func__);
-
-    mutex_lock(&fisor->ops_lock);
-
-    paccels = fisor->paccels;
-    npaccels = fisor->npaccels;
-
-    for (i=0; i<npaccels; i++) {
-        struct paccel *paccel = &paccels[i];
-        struct vaccel *ptr = NULL, *round = NULL, *last = NULL;
-
-        if (paccel->mode == VACCEL_TYPE_DIRECT) {
-            continue;
-        }
-
-        mutex_lock(&paccel->ops_lock);
-
-        last = list_last_entry(&paccel->timeslc.children,
-                    struct vaccel, timeslc.paccel_next);
-        ptr = paccel->timeslc.curr;
-        if (ptr) {
-            if (ptr->enabled == false) {
-                fisor_info("slicing: curr vaccel %d not enabled",
-                            ptr->seq_id);
-                continue;
-            }
-
-            fisor_info("slicing: curr vaccel %d", ptr->seq_id);
-
-            if (ptr->timeslc.trans_status ==
-                        VACCEL_TRANSACTION_HARDWARE) {
-                if (fisor_hw_check_trans_finished(paccel)) {
-                    fisor_info("slicing: curr vaccel %d finished",
-                                    ptr->seq_id);
-
-                    /* the transaction is finished */
-                    ptr->timeslc.trans_status = VACCEL_TRANSACTION_IDLE;
-                    STORE_LE64((u64*)&ptr->bar[VACCEL_BAR_0][0x18], 0x2);
-
-                    round = ptr;
-                    if (ptr == last) {
-                        ptr = list_first_entry(&paccel->timeslc.children,
-                                    struct vaccel, timeslc.paccel_next);
-                    }
-                    else {
-                        ptr = list_next_entry(ptr, timeslc.paccel_next);
-                    }
-                }
-                else {
-                    /* the transacetion is unfinished, skip */
-                    fisor_info("slicing: curr vaccel %d still running",
-                                    ptr->seq_id);
-                    continue;
-                }
-            }
-        }
-        else {
-            fisor_info("slicing: curr vaccel NULL");
-            ptr = list_first_entry(&paccel->timeslc.children,
-                        struct vaccel, timeslc.paccel_next);
-            round = ptr;
-        }
-
-        do {
-            if (ptr->timeslc.trans_status
-                        == VACCEL_TRANSACTION_STARTED) {
-                fisor_info("slicing: vaccel %d selected", ptr->seq_id);
-                vaccel_time_slicing_submit(ptr);
-                ptr->timeslc.trans_status = VACCEL_TRANSACTION_HARDWARE;
-            }
-            else {
-                fisor_info("slicing: vaccel %d empty, skipped", ptr->seq_id);
-            }
-
-            if (ptr == last) {
-                ptr = list_first_entry(&paccel->timeslc.children,
-                            struct vaccel, timeslc.paccel_next);
-            }
-            else {
-                ptr = list_next_entry(ptr, timeslc.paccel_next);
-            }
-        } while (ptr != round);
-
-        mutex_unlock(&paccel->ops_lock);
-    }
-
-    mutex_unlock(&fisor->ops_lock);
-
-    fisor_info("%s exit", __func__);
-}
-
 static void naive_schedule_with_lock(struct paccel *paccel, struct vaccel *prev)
 {
     struct vaccel *vaccel;
@@ -304,6 +188,8 @@ static void naive_schedule_with_lock(struct paccel *paccel, struct vaccel *prev)
                     vaccel->seq_id, paccel->accel_id);
             vaccel_time_slicing_submit(vaccel);
             vaccel->timeslc.trans_status = VACCEL_TRANSACTION_HARDWARE;
+            STORE_LE64((u64*)&vaccel->bar[VACCEL_BAR_0][FISOR_TRANS_CTL],
+                    FISOR_TRANS_CTL_BUSY);
             vaccel->timeslc.start_time = jiffies;
             return;
         }
@@ -392,7 +278,6 @@ int kthread_watch_time(void *fisor_param)
 static int vaccel_time_slicing_handle_mmio_read(struct vaccel *vaccel,
             u32 index, u32 offset, u64 *val)
 {
-    struct fisor *fisor = vaccel->fisor;
     struct paccel *paccel = vaccel->paccel;
 
     if (vaccel->mode != VACCEL_TYPE_TIME_SLICING) {
@@ -412,12 +297,6 @@ static int vaccel_time_slicing_handle_mmio_read(struct vaccel *vaccel,
         }
         
         LOAD_LE64(&vaccel->bar[VACCEL_BAR_0][offset], *val);
-
-        // if (offset == 0x18) {
-        //     /* if someone is reading this, we also do a round
-        //      * of scheduling */
-        //     do_vaccel_time_slicing(fisor);
-        // }
     } else {
         switch (offset) {
         default:
@@ -432,7 +311,6 @@ static int vaccel_time_slicing_handle_mmio_read(struct vaccel *vaccel,
 static int vaccel_time_slicing_handle_mmio_write(struct vaccel *vaccel,
             u32 index, u32 offset, u64 val)
 {
-    struct fisor *fisor = vaccel->fisor;
     struct paccel *paccel = vaccel->paccel;
     int ret;
 
@@ -464,11 +342,6 @@ static int vaccel_time_slicing_handle_mmio_write(struct vaccel *vaccel,
             }
             vaccel->timeslc.trans_status = VACCEL_TRANSACTION_STARTED;
         }
-
-        // /* fisor follows a asyncchronized scheduling schema,
-        //  * when a transaction started, fisor checks all pending
-        //  * transactions, and decides which to run next. */
-        // do_vaccel_time_slicing(fisor);
 
     } else if (index == VFIO_PCI_BAR2_REGION_INDEX) {
         ret = vaccel_handle_bar2_write(vaccel, offset, val);

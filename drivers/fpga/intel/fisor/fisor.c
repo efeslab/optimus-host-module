@@ -900,13 +900,19 @@ static int fisor_probe(struct fisor *fisor, u32 *ndirect, u32 *nts)
         fisor->paccels[i].mmio_start = 0x1000*(i+1);
         fisor->paccels[i].mmio_size = 0x1000;
 
-        fisor->paccels[i].timeslc.total = 4;
-        fisor->paccels[i].timeslc.occupied = 0;
-        INIT_LIST_HEAD(&fisor->paccels[i].timeslc.children);
-        fisor->paccels[i].timeslc.curr = NULL;
-
         fisor->paccels[i].fisor = fisor;
-        fisor->paccels[i].ops = &paccel_direct_ops;
+
+        if (fisor->paccels[i].mode == VACCEL_TYPE_DIRECT) {
+            fisor->paccels[i].direct.occupied = false;
+            fisor->paccels[i].ops = &paccel_direct_ops;
+        }
+        else {
+            fisor->paccels[i].timeslc.total = 4;
+            fisor->paccels[i].timeslc.occupied = 0;
+            INIT_LIST_HEAD(&fisor->paccels[i].timeslc.children);
+            fisor->paccels[i].timeslc.curr = NULL;
+            fisor->paccels[i].ops = &paccel_time_slicing_ops;
+        }
 
         mutex_init(&fisor->paccels[i].ops_lock);
     }
