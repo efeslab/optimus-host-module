@@ -184,7 +184,7 @@ static void naive_schedule_with_lock(struct paccel *paccel, struct vaccel *prev)
 
     list_for_each_entry(vaccel, &paccel->timeslc.children, timeslc.paccel_next) {
         if (vaccel->timeslc.trans_status == VACCEL_TRANSACTION_STARTED) {
-            fisor_info("Schedule vaccel %d on paccel %d \n",
+            fisor_info("kthread: Schedule vaccel %d on paccel %d \n",
                     vaccel->seq_id, paccel->accel_id);
             vaccel_time_slicing_submit(vaccel);
             vaccel->timeslc.trans_status = VACCEL_TRANSACTION_HARDWARE;
@@ -196,7 +196,7 @@ static void naive_schedule_with_lock(struct paccel *paccel, struct vaccel *prev)
         }
     }
 
-    fisor_info("No job is runnable on paccel %d \n", paccel->accel_id);
+    // fisor_info("No job is runnable on paccel %d \n", paccel->accel_id);
     return;
 
 }
@@ -215,7 +215,7 @@ int kthread_watch_time(void *fisor_param)
 
     while (!kthread_should_stop()) {
 
-        fisor_info("Scheduling kthread wakes up \n");
+        // fisor_info("Scheduling kthread wakes up \n");
 
         for (i = 0; i < npaccels; i++) {
 
@@ -241,6 +241,8 @@ int kthread_watch_time(void *fisor_param)
 
                 /* If hw is still busy, unlock and continue */
                 if (!fisor_hw_check_idle(paccel)) {
+                    fisor_info("kthread: vaccel %d still runs on paccel %d \n",
+                        curr->seq_id, paccel->accel_id);
                     mutex_unlock(&paccel->ops_lock);
                     continue;
                 }
@@ -250,7 +252,7 @@ int kthread_watch_time(void *fisor_param)
 
                 curr->timeslc.running_time += run_duration;
 
-                fisor_info("vaccel %d on paccel %d runs for %llud \n",
+                fisor_info("kthread: vaccel %d on paccel %d runs for %llu \n",
                         curr->seq_id, paccel->accel_id, run_duration);
 
                 desched:
@@ -267,7 +269,7 @@ int kthread_watch_time(void *fisor_param)
             mutex_unlock(&paccel->ops_lock);
         }
 
-        fisor_info("Scheduling kthread sleeps \n");
+        // fisor_info("Scheduling kthread sleeps \n");
         msleep(2000);
     }
 
@@ -397,6 +399,26 @@ static int vaccel_time_slicing_close(struct mdev_device *mdev)
 
 static int vaccel_time_slicing_soft_reset(struct vaccel *vaccel)
 {
+    struct paccel *paccel = vaccel->paccel;
+
+    mutex_lock(&paccel->ops_lock);
+
+    if (vaccel->timeslc.trans_status ==
+            VACCEL_TRANSACTION_STARTED) {
+        vaccel->timeslc.trans_status = VACCEL_TRANSACTION_IDLE;
+    }
+    else if (vaccel->timeslc.trans_status ==
+            VACCEL_TRANSACTION_HARDWARE) {
+        do_paccel_soft_reset(paccel, true);
+        /* TODO: record running time before interrupt */
+        paccel->timeslc.curr = NULL;
+        vaccel->timeslc.trans_status = VACCEL_TRANSACTION_IDLE;
+    }
+
+    mutex_unlock(&paccel->ops_lock);
+
+    do_vaccel_bar_cleanup(vaccel);
+
     return 0;
 }
 
