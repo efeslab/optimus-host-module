@@ -224,6 +224,9 @@ static void do_vaccel_time_slicing(struct fisor *fisor)
                     continue;
                 }
             }
+            else {
+                round = ptr;
+            }
         }
         else {
             fisor_info("slicing: curr vaccel NULL");
