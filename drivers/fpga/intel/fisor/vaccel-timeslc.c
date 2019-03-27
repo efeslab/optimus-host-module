@@ -191,6 +191,7 @@ static void naive_schedule_with_lock(struct paccel *paccel, struct vaccel *prev)
             STORE_LE64((u64*)&vaccel->bar[VACCEL_BAR_0][FISOR_TRANS_CTL],
                     FISOR_TRANS_CTL_BUSY);
             vaccel->timeslc.start_time = jiffies;
+            paccel->timeslc.curr = vaccel;
             return;
         }
     }
