@@ -1023,6 +1023,7 @@ int fpga_register_afu_mdev_device(struct platform_device *pdev)
     if (nts != 0) {
         fisor->scheduler =
             kthread_run(kthread_watch_time, fisor, "fisor-sched");
+        fisor->user_check_signal = 0;
     }
     else
         fisor->scheduler = NULL;

@@ -82,6 +82,7 @@ struct fisor {
     struct paccel *paccels;
 
     struct task_struct *scheduler;
+    int user_check_signal;
 };
 
 #define SIZE_64G (64*1024*1024*1024LLU)

@@ -223,9 +223,15 @@ int kthread_watch_time(void *fisor_param)
 
     fisor_info("Time keeping (scheduling) kthread starts \n");
 
-    while (!kthread_should_stop()) {
+    while (1) {
 
         // fisor_info("Scheduling kthread wakes up \n");
+
+        if (kthread_should_stop()) {
+            break;
+        }
+
+        fisor->user_check_signal = 0;
 
         for (i = 0; i < npaccels; i++) {
 
@@ -280,8 +286,18 @@ int kthread_watch_time(void *fisor_param)
             mutex_unlock(&paccel->ops_lock);
         }
 
+        set_current_state(TASK_INTERRUPTIBLE);
+
+        if (kthread_should_stop()) {
+            break;
+        }
+
+        if (fisor->user_check_signal) {
+            continue;
+        }
+
         // fisor_info("Scheduling kthread sleeps \n");
-        msleep(2000);
+        schedule_timeout(10 * HZ);
     }
 
     fisor_info("Time keeping (scheduling) kthread exits \n");
@@ -292,6 +308,7 @@ int kthread_watch_time(void *fisor_param)
 static int vaccel_time_slicing_handle_mmio_read(struct vaccel *vaccel,
             u32 index, u32 offset, u64 *val)
 {
+    struct fisor *fisor = vaccel->fisor;
     struct paccel *paccel = vaccel->paccel;
 
     if (vaccel->mode != VACCEL_TYPE_TIME_SLICING) {
@@ -311,6 +328,12 @@ static int vaccel_time_slicing_handle_mmio_read(struct vaccel *vaccel,
         }
         
         LOAD_LE64(&vaccel->bar[VACCEL_BAR_0][offset], *val);
+
+        if (offset == 0x18) {
+            vaccel_info(vaccel, "Check hw transaction state \n");
+            fisor->user_check_signal = 1;
+            wake_up_process(fisor->scheduler);
+        }
     } else {
         switch (offset) {
         default:
@@ -325,6 +348,7 @@ static int vaccel_time_slicing_handle_mmio_read(struct vaccel *vaccel,
 static int vaccel_time_slicing_handle_mmio_write(struct vaccel *vaccel,
             u32 index, u32 offset, u64 val)
 {
+    struct fisor *fisor = vaccel->fisor;
     struct paccel *paccel = vaccel->paccel;
     int ret;
 
@@ -355,6 +379,9 @@ static int vaccel_time_slicing_handle_mmio_write(struct vaccel *vaccel,
                 vaccel_info(vaccel, "previous transaction not finished");
             }
             vaccel->timeslc.trans_status = VACCEL_TRANSACTION_STARTED;
+            vaccel_info(vaccel, "Commit transaction, wakeup scheduler\n");
+            fisor->user_check_signal = 1;
+            wake_up_process(fisor->scheduler);
         }
 
     } else if (index == VFIO_PCI_BAR2_REGION_INDEX) {
