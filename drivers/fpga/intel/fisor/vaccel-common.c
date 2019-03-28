@@ -214,20 +214,20 @@ int vaccel_handle_bar2_write(struct vaccel *vaccel, u32 offset, u64 val)
             return ret;
         }
 
-        if (!PAGE_ALIGNED(notifier_gpa.gva_start_addr)) {
+        if (!PAGE_ALIGNED(notifier.gva_start_addr)) {
             vaccel_err(vaccel, "%s: not page alligned", __func__);
             return ret;
         }
 
-        full_size = sizeof(notifier) + sizeof(uint64_t) * notifier.num_pages;
-        notifier_full = kmalloc(full_size, GFP_KERNEL);
-        ret = vaccel_read_gpa(vaccel, notifier_gpa, notifier_full, full_size);
-        if (ret) {
-            vaccel_err(vaccel, *"%s: read gpa error", __func__);
-            return ret;
-        }
-
         if (notifier.behavior == 0) { /* 0 for map */
+            full_size = sizeof(notifier) + sizeof(uint64_t) * notifier.num_pages;
+            notifier_full = kmalloc(full_size, GFP_KERNEL);
+            ret = vaccel_read_gpa(vaccel, notifier_gpa, notifier_full, full_size);
+            if (ret) {
+                vaccel_err(vaccel, "%s: read gpa error", __func__);
+                return ret;
+            }
+
             vaccel_info(vaccel, "fast paging map: %d pages", notifier.num_pages);
 
             idx = srcu_read_lock(&vaccel->kvm->srcu);
@@ -237,6 +237,9 @@ int vaccel_handle_bar2_write(struct vaccel *vaccel, u32 offset, u64 val)
                 gva_iter += PAGE_SIZE;
             }
             srcu_read_unlock(&vaccel->kvm->srcu, idx);
+
+            kfree(notifier_full);
+            notifier_full = NULL;
         }
         else { /* 1 for unmap */
             vaccel_info(vaccel, "fast paging unmap: %d pages", notifier.num_pages);
@@ -244,14 +247,11 @@ int vaccel_handle_bar2_write(struct vaccel *vaccel, u32 offset, u64 val)
             idx = srcu_read_lock(&vaccel->kvm->srcu);
             gva_iter = notifier.gva_start_addr;
             for (i = 0; i < notifier.num_pages; i++) {
-                vaccel_iommu_page_unmap(vaccel, notifier_full->gpas[i], gva_iter);
+                vaccel_iommu_page_unmap(vaccel, gva_iter);
                 gva_iter += PAGE_SIZE;
             }
             srcu_read_unlock(&vaccel->kvm->srcu, idx);
         }
-
-        kfree(notifier_full);
-        notifier_full = NULL;
 
         break;
     }
