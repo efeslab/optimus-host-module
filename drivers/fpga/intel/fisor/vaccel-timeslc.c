@@ -90,7 +90,6 @@ static int vaccel_time_slicing_uinit(struct vaccel *vaccel)
 
     /* set occupied as false */
     mutex_lock(&paccel->ops_lock);
-    paccel->timeslc.occupied--;
     list_for_each_entry_safe(d, tmp_d, &paccel->timeslc.children, timeslc.paccel_next) {
         if (vaccel == d) {
             list_del(&vaccel->timeslc.paccel_next);
@@ -103,6 +102,7 @@ static int vaccel_time_slicing_uinit(struct vaccel *vaccel)
         mutex_unlock(&paccel->ops_lock);
         return ret;
     }
+    paccel->timeslc.occupied--;
     mutex_unlock(&paccel->ops_lock);
 
     mdev_set_drvdata(mdev, NULL);

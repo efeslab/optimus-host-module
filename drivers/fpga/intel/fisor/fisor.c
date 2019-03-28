@@ -94,6 +94,8 @@ int vaccel_remove(struct mdev_device *mdev)
     struct paccel *paccel = vaccel->paccel;
     int ret = -EINVAL;
 
+    fisor_info("call: %s on vaccel %d \n",__func__, vaccel->seq_id);
+
     mutex_lock(&fisor->ops_lock);
     list_for_each_entry_safe(mds, tmp_mds, &fisor->vaccel_list, next) {
         if (vaccel == mds) {
