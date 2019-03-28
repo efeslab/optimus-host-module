@@ -31,6 +31,7 @@
 #include <linux/kthread.h>
 #include <linux/atomic.h>
 
+#define PAGE_ALIGNED(addr) IS_ALIGNED((unsigned long)(addr), PAGE_SIZE)
 
 #define VERSION_STRING  "0.1"
 #define DRIVER_AUTHOR   "Jiacheng Ma"
@@ -197,6 +198,13 @@ struct vaccel {
 struct vaccel_paging_notifier {
     uint64_t va;
     uint64_t pa;
+};
+
+struct vaccel_fast_paging_notifier {
+    uint32_t num_pages;
+    uint32_t behavior;
+    uint64_t gva_start_addr;
+    uint64_t gpas[0];
 };
 
 void dump_buffer_32(char *buf, uint32_t count);
