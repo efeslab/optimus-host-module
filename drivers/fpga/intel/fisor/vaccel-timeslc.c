@@ -267,9 +267,15 @@ int kthread_watch_time(void *fisor_param)
                 run_duration = (jiffies -
                         curr->timeslc.start_time) * 1000 / HZ;
 
+                if (run_duration < 100) {
+                    /* Give hardware enough time */
+                    mutex_unlock(&paccel->ops_lock);
+                    continue;
+                }
+
                 curr->timeslc.running_time += run_duration;
 
-                fisor_info("kthread: vaccel %d on paccel %d runs for %llu \n",
+                fisor_info("kthread: vaccel %d on paccel %d runs for %llu ms \n",
                         curr->seq_id, paccel->accel_id, run_duration);
 
                 desched:
@@ -289,10 +295,12 @@ int kthread_watch_time(void *fisor_param)
         set_current_state(TASK_INTERRUPTIBLE);
 
         if (kthread_should_stop()) {
+            set_current_state(TASK_RUNNING);
             break;
         }
 
         if (fisor->user_check_signal) {
+            set_current_state(TASK_RUNNING);
             continue;
         }
 
