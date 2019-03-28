@@ -102,6 +102,7 @@ int vaccel_remove(struct mdev_device *mdev)
             ret = paccel->ops->vaccel_uinit(vaccel);
             if (ret) {
                 paccel_err(paccel, "uinitialization failed");
+                mutex_unlock(&fisor->ops_lock);
                 return ret;
             }
             

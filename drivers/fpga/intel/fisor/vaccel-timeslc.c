@@ -88,16 +88,6 @@ static int vaccel_time_slicing_uinit(struct vaccel *vaccel)
         return -EINVAL;
     }
 
-    mdev_set_drvdata(mdev, NULL);
-
-    /* free all allocated regions */
-    kfree(vaccel->vconfig);
-    kfree(vaccel->bar[VACCEL_BAR_0]);
-    kfree(vaccel->bar[VACCEL_BAR_2]);
-    vaccel->vconfig = NULL;
-    vaccel->bar[VACCEL_BAR_0] = NULL;
-    vaccel->bar[VACCEL_BAR_2] = NULL;
-
     /* set occupied as false */
     mutex_lock(&paccel->ops_lock);
     paccel->timeslc.occupied--;
@@ -108,9 +98,24 @@ static int vaccel_time_slicing_uinit(struct vaccel *vaccel)
             break;
         }
     }
+    if (ret) {
+        vaccel_err(vaccel, "uinit failed: not found in paccel list\n");
+        mutex_unlock(&paccel->ops_lock);
+        return ret;
+    }
     mutex_unlock(&paccel->ops_lock);
 
-    return ret;
+    mdev_set_drvdata(mdev, NULL);
+
+    /* free all allocated regions */
+    kfree(vaccel->vconfig);
+    kfree(vaccel->bar[VACCEL_BAR_0]);
+    kfree(vaccel->bar[VACCEL_BAR_2]);
+    vaccel->vconfig = NULL;
+    vaccel->bar[VACCEL_BAR_0] = NULL;
+    vaccel->bar[VACCEL_BAR_2] = NULL;
+
+    return 0;
 }
 
 static bool fisor_hw_check_idle(struct paccel *paccel)
