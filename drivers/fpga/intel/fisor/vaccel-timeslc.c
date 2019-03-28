@@ -88,6 +88,8 @@ static int vaccel_time_slicing_uinit(struct vaccel *vaccel)
         return -EINVAL;
     }
 
+    vaccel_info(vaccel, "To be removed from paccel %d\n", paccel->accel_id);
+
     /* set occupied as false */
     mutex_lock(&paccel->ops_lock);
     list_for_each_entry_safe(d, tmp_d, &paccel->timeslc.children, timeslc.paccel_next) {
@@ -172,7 +174,7 @@ static int vaccel_time_slicing_submit(struct vaccel *vaccel)
 
 static void naive_schedule_with_lock(struct paccel *paccel, struct vaccel *prev)
 {
-    struct vaccel *vaccel;
+    struct vaccel *vaccel, *tmp_v;
 
     WARN_ON(paccel == NULL);
 
@@ -187,7 +189,10 @@ static void naive_schedule_with_lock(struct paccel *paccel, struct vaccel *prev)
             &paccel->timeslc.children);
     }
 
-    list_for_each_entry(vaccel, &paccel->timeslc.children, timeslc.paccel_next) {
+    // paccel_info(paccel, "has these vaccel: \n");
+
+    list_for_each_entry_safe(vaccel, tmp_v, &paccel->timeslc.children, timeslc.paccel_next) {
+    //    paccel_info(paccel, "vaccel %d \n", vaccel->seq_id);
         if (vaccel->timeslc.trans_status == VACCEL_TRANSACTION_STARTED) {
             fisor_info("kthread: Schedule vaccel %d on paccel %d \n",
                     vaccel->seq_id, paccel->accel_id);
@@ -213,7 +218,7 @@ int kthread_watch_time(void *fisor_param)
     u32 npaccels = fisor->npaccels;
     int i;
     struct paccel *paccel;
-    struct vaccel *curr = NULL;
+    struct vaccel *curr;
     u64 run_duration;
 
     fisor_info("Time keeping (scheduling) kthread starts \n");
@@ -224,6 +229,7 @@ int kthread_watch_time(void *fisor_param)
 
         for (i = 0; i < npaccels; i++) {
 
+            curr = NULL;
             paccel = &paccels[i];
 
             if (paccel->mode == VACCEL_TYPE_DIRECT)
@@ -406,6 +412,8 @@ static int vaccel_time_slicing_soft_reset(struct vaccel *vaccel)
 {
     struct paccel *paccel = vaccel->paccel;
     struct fisor *fisor = paccel->fisor;
+
+    vaccel_info(vaccel, "call %s \n", __func__);
 
     mutex_lock(&fisor->ops_lock);
     mutex_lock(&paccel->ops_lock);
