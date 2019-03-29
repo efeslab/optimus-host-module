@@ -99,6 +99,9 @@ struct fisor {
 #define FISOR_TRANS_CTL 0x18
 #define FISOR_TRANS_CTL_IDLE 0
 #define FISOR_TRANS_CTL_BUSY 1
+#define FISOR_TRANS_CTL_FINISH 2
+#define FISOR_TRANS_CTL_ABORT 3
+#define FISOR_TRANS_CTL_PAUSE 4
 
 enum {
     VACCEL_BAR_0,

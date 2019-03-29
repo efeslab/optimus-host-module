@@ -172,9 +172,44 @@ static int vaccel_time_slicing_submit(struct vaccel *vaccel)
     return 0;
 }
 
-static void paccel_schedule_round_robin(struct paccel *paccel, struct vaccel *prev)
+static inline void vaccel_record_stop(struct paccel *paccel, struct vaccel *vaccel)
 {
-    struct vaccel *vaccel, *tmp_v;
+    fisor_info("kthread: De-schedule vaccel %d on paccel %d \n",
+            vaccel->seq_id, paccel->accel_id);
+    vaccel->timeslc.start_time = 0;
+    vaccel->timeslc.trans_status = VACCEL_TRANSACTION_IDLE;
+    STORE_LE64((u64*)&vaccel->bar[VACCEL_BAR_0][FISOR_TRANS_CTL],
+            FISOR_TRANS_CTL_IDLE);
+    paccel->timeslc.curr = NULL;
+}
+
+static inline void vaccel_record_run(struct paccel *paccel, struct vaccel *vaccel)
+{
+    fisor_info("kthread: Schedule vaccel %d on paccel %d \n",
+            vaccel->seq_id, paccel->accel_id);
+    vaccel_time_slicing_submit(vaccel);
+    vaccel->timeslc.start_time = jiffies;
+    vaccel->timeslc.trans_status = VACCEL_TRANSACTION_HARDWARE;
+    STORE_LE64((u64*)&vaccel->bar[VACCEL_BAR_0][FISOR_TRANS_CTL],
+            FISOR_TRANS_CTL_BUSY);
+    paccel->timeslc.curr = vaccel;
+}
+
+static inline void vaccel_record_abort(struct paccel *paccel, struct vaccel *vaccel)
+{
+    fisor_info("kthread: Abort vaccel %d on paccel %d \n",
+            vaccel->seq_id, paccel->accel_id);
+    vaccel->timeslc.start_time = 0;
+    vaccel->timeslc.trans_status = VACCEL_TRANSACTION_IDLE;
+    STORE_LE64((u64*)&vaccel->bar[VACCEL_BAR_0][FISOR_TRANS_CTL],
+            FISOR_TRANS_CTL_ABORT);
+    paccel->timeslc.curr = NULL;
+}
+
+static void paccel_schedule_round_robin(struct paccel *paccel)
+{
+    struct vaccel *curr = NULL, *vaccel, *tmp_v;
+    u64 run_duration;
 
     WARN_ON(paccel == NULL);
 
@@ -184,30 +219,151 @@ static void paccel_schedule_round_robin(struct paccel *paccel, struct vaccel *pr
         return;
     }
 
-    if (prev != NULL) {
-    list_move_tail(&prev->timeslc.paccel_next,
+    if (paccel->timeslc.curr != NULL) {
+
+        curr = paccel->timeslc.curr;
+
+        if (!curr->enabled) {
+            paccel_err(paccel, "curr vaccel %d not enabled \n", curr->seq_id);
+            vaccel_record_stop(paccel, curr);
+            goto next_round;
+        }
+
+        if (curr->timeslc.trans_status != VACCEL_TRANSACTION_HARDWARE) {
+            paccel_err(paccel, "curr vaccel %d not sched \n", curr->seq_id);
+            vaccel_record_stop(paccel, curr);
+            goto next_round;
+        }
+
+        /* If hw is still busy, unlock and continue */
+        if (!fisor_hw_check_idle(paccel)) {
+            fisor_info("kthread: vaccel %d still runs on paccel %d \n",
+                curr->seq_id, paccel->accel_id);
+            mutex_unlock(&paccel->ops_lock);
+            return;
+        }
+        
+        run_duration = (jiffies -
+                curr->timeslc.start_time) * 1000 / HZ;
+        if (run_duration < 10) {
+            /* Give hardware enough time */
+            mutex_unlock(&paccel->ops_lock);
+            return;
+        }
+
+        curr->timeslc.running_time += run_duration;
+        fisor_info("kthread: vaccel %d on paccel %d runs for %llu ms \n",
+                curr->seq_id, paccel->accel_id, run_duration);
+        vaccel_record_stop(paccel, curr);
+        /* maintain linked list order */
+        list_move_tail(&curr->timeslc.paccel_next,
             &paccel->timeslc.children);
     }
 
+    next_round:
     // paccel_info(paccel, "has these vaccel: \n");
 
     list_for_each_entry_safe(vaccel, tmp_v, &paccel->timeslc.children, timeslc.paccel_next) {
     //    paccel_info(paccel, "vaccel %d \n", vaccel->seq_id);
         if (vaccel->timeslc.trans_status == VACCEL_TRANSACTION_STARTED) {
-            fisor_info("kthread: Schedule vaccel %d on paccel %d \n",
-                    vaccel->seq_id, paccel->accel_id);
-            vaccel_time_slicing_submit(vaccel);
-            vaccel->timeslc.trans_status = VACCEL_TRANSACTION_HARDWARE;
-            STORE_LE64((u64*)&vaccel->bar[VACCEL_BAR_0][FISOR_TRANS_CTL],
-                    FISOR_TRANS_CTL_BUSY);
-            vaccel->timeslc.start_time = jiffies;
-            paccel->timeslc.curr = vaccel;
+            vaccel_record_run(paccel, vaccel);
             return;
         }
     }
 
     // fisor_info("No job is runnable on paccel %d \n", paccel->accel_id);
-    return;
+
+}
+
+static void paccel_schedule_fair_abort(struct paccel *paccel)
+{
+    struct vaccel *curr = NULL, *vaccel, *tmp_v;
+    u64 run_duration;
+
+    WARN_ON(paccel == NULL);
+
+    if (paccel->mode != VACCEL_TYPE_TIME_SLICING) {
+        fisor_err("%s: paccel %d is in the wrong mode\n",
+                __func__, paccel->accel_id);
+        return;
+    }
+
+    if (paccel->timeslc.curr != NULL) {
+
+        curr = paccel->timeslc.curr;
+
+        if (!curr->enabled) {
+            paccel_err(paccel, "curr vaccel %d not enabled \n", curr->seq_id);
+            vaccel_record_stop(paccel, curr);
+            goto next_round;
+        }
+
+        if (curr->timeslc.trans_status != VACCEL_TRANSACTION_HARDWARE) {
+            paccel_err(paccel, "curr vaccel %d not sched \n", curr->seq_id);
+            vaccel_record_stop(paccel, curr);
+            goto next_round;
+        }
+
+        run_duration = (jiffies -
+                curr->timeslc.start_time) * 1000 / HZ;
+
+        /* If hw is still busy, check max running period */
+        if (!fisor_hw_check_idle(paccel)) {
+            if (run_duration <= PACCEL_TS_MAX_PERIOD_MS) {
+                fisor_info("kthread: vaccel %d still runs on paccel\
+                        %d \n", curr->seq_id, paccel->accel_id);
+                mutex_unlock(&paccel->ops_lock);
+                return;
+            }
+            else {
+                fisor_info("kthread: vaccel %d runs on paccel %d\
+                        for %llu ms, timeout \n",curr->seq_id,
+                        paccel->accel_id, run_duration);
+                curr->timeslc.running_time += run_duration;
+                vaccel_record_abort(paccel, curr);
+            }
+        }
+
+        if (run_duration < 10) {
+            /* Give hardware enough time */
+            mutex_unlock(&paccel->ops_lock);
+            return;
+        }
+
+        curr->timeslc.running_time += run_duration;
+        fisor_info("kthread: vaccel %d on paccel %d runs for %llu ms \n",
+                curr->seq_id, paccel->accel_id, run_duration);
+        vaccel_record_stop(paccel, curr);
+
+        /* maintain linked list order */
+        list_del(&curr->timeslc.paccel_next);
+        list_for_each_entry(vaccel, &paccel->timeslc.children, timeslc.paccel_next) {
+            if (vaccel->timeslc.running_time >
+                    curr->timeslc.running_time)
+                break;
+        }
+        if (&vaccel->timeslc.paccel_next == &paccel->timeslc.children) {
+            list_add_tail(&curr->timeslc.paccel_next,
+                    &paccel->timeslc.children);
+        }
+        else {
+            list_add(&curr->timeslc.paccel_next,
+                    vaccel->timeslc.paccel_next.prev);
+        }
+    }
+
+    next_round:
+    // paccel_info(paccel, "has these vaccel: \n");
+
+    list_for_each_entry_safe(vaccel, tmp_v, &paccel->timeslc.children, timeslc.paccel_next) {
+    //    paccel_info(paccel, "vaccel %d \n", vaccel->seq_id);
+        if (vaccel->timeslc.trans_status == VACCEL_TRANSACTION_STARTED) {
+            vaccel_record_run(paccel, vaccel);
+            return;
+        }
+    }
+
+    // fisor_info("No job is runnable on paccel %d \n", paccel->accel_id);
 
 }
 
@@ -218,8 +374,6 @@ int kthread_watch_time(void *fisor_param)
     u32 npaccels = fisor->npaccels;
     int i;
     struct paccel *paccel;
-    struct vaccel *curr;
-    u64 run_duration;
 
     fisor_info("Time keeping (scheduling) kthread starts \n");
 
@@ -235,7 +389,6 @@ int kthread_watch_time(void *fisor_param)
 
         for (i = 0; i < npaccels; i++) {
 
-            curr = NULL;
             paccel = &paccels[i];
 
             if (paccel->mode == VACCEL_TYPE_DIRECT)
@@ -243,52 +396,16 @@ int kthread_watch_time(void *fisor_param)
 
             mutex_lock(&paccel->ops_lock);
 
-            if (paccel->timeslc.curr != NULL) {
-                curr = paccel->timeslc.curr;
-
-                if (!curr->enabled) {
-                    paccel_err(paccel, "curr vaccel %d not enabled \n", curr->seq_id);
-                    goto desched;
-                }
-
-                if (curr->timeslc.trans_status != VACCEL_TRANSACTION_HARDWARE) {
-                    paccel_err(paccel, "curr vaccel %d not sched \n", curr->seq_id);
-                    goto desched;
-                }
-
-                /* If hw is still busy, unlock and continue */
-                if (!fisor_hw_check_idle(paccel)) {
-                    fisor_info("kthread: vaccel %d still runs on paccel %d \n",
-                        curr->seq_id, paccel->accel_id);
-                    mutex_unlock(&paccel->ops_lock);
-                    continue;
-                }
-
-                run_duration = (jiffies -
-                        curr->timeslc.start_time) * 1000 / HZ;
-
-                if (run_duration < 100) {
-                    /* Give hardware enough time */
-                    mutex_unlock(&paccel->ops_lock);
-                    continue;
-                }
-
-                curr->timeslc.running_time += run_duration;
-
-                fisor_info("kthread: vaccel %d on paccel %d runs for %llu ms \n",
-                        curr->seq_id, paccel->accel_id, run_duration);
-
-                desched:
-                curr->timeslc.start_time = 0;
-                curr->timeslc.trans_status = VACCEL_TRANSACTION_IDLE;
-                STORE_LE64((u64*)&curr->bar[VACCEL_BAR_0][FISOR_TRANS_CTL],
-                        FISOR_TRANS_CTL_IDLE);
-                paccel->timeslc.curr = NULL;
-            }
-
             /* Make scheduling decision */
-            if (paccel->timeslc.policy == PACCEL_TS_POLICY_RR)
-                paccel_schedule_round_robin(paccel, curr);
+            switch (paccel->timeslc.policy) {
+            case PACCEL_TS_POLICY_FAIR_ABORT:
+            {
+                paccel_schedule_fair_abort(paccel);
+                break;
+            }
+            default:
+                paccel_schedule_round_robin(paccel);
+            }
 
             mutex_unlock(&paccel->ops_lock);
         }
