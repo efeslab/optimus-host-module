@@ -133,6 +133,14 @@ extern struct paccel_ops paccel_time_slicing_ops;
 extern struct vaccel_ops vaccel_direct_ops;
 extern struct vaccel_ops vaccel_time_slicing_ops;
 
+typedef enum {
+    PACCEL_TS_POLICY_RR,
+    PACCEL_TS_POLICY_FAIR_ABORT,
+    PACCEL_TS_POLICY_FAIR_NOTIFY
+} paccel_ts_sched_policy_t;
+
+#define PACCEL_TS_MAX_PERIOD_MS 20000
+
 struct paccel {
     struct fisor *fisor;
     fisor_mode_t mode;
@@ -152,6 +160,7 @@ struct paccel {
         struct {
             u32 total;
             u32 occupied;
+            paccel_ts_sched_policy_t policy;
             struct list_head children;
             struct vaccel *curr;
         } timeslc;

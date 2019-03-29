@@ -172,7 +172,7 @@ static int vaccel_time_slicing_submit(struct vaccel *vaccel)
     return 0;
 }
 
-static void naive_schedule_with_lock(struct paccel *paccel, struct vaccel *prev)
+static void paccel_schedule_round_robin(struct paccel *paccel, struct vaccel *prev)
 {
     struct vaccel *vaccel, *tmp_v;
 
@@ -287,7 +287,8 @@ int kthread_watch_time(void *fisor_param)
             }
 
             /* Make scheduling decision */
-            naive_schedule_with_lock(paccel, curr);
+            if (paccel->timeslc.policy == PACCEL_TS_POLICY_RR)
+                paccel_schedule_round_robin(paccel, curr);
 
             mutex_unlock(&paccel->ops_lock);
         }
