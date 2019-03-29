@@ -237,6 +237,7 @@ int vaccel_handle_bar2_write(struct vaccel *vaccel,
 int vaccel_group_notifier(struct notifier_block *nb,
             long unsigned int action, void *data);
 
+#ifdef FISOR_DBG
 #define fisor_err(fmt, args...) \
     pr_err("fisor: "fmt, ##args);
 #define fisor_info(fmt, args...) \
@@ -251,5 +252,15 @@ int vaccel_group_notifier(struct notifier_block *nb,
     pr_err("vaccel[%d]: "fmt, vaccel->seq_id, ##args)
 #define vaccel_info(vaccel, fmt, args...) \
     pr_info("vaccel[%d]: "fmt, vaccel->seq_id, ##args)
+#else
+#define fisor_err(fmt, args...)
+#define fisor_info(fmt, args...)
+
+#define paccel_err(paccel, fmt, args...)
+#define paccel_info(paccel, fmt, args...)
+
+#define vaccel_err(vaccel, fmt, args...)
+#define vaccel_info(vaccel, fmt, args...)
+#endif
 
 #endif /* _VAI_INTERNAL_H_ */
