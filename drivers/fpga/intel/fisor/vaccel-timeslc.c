@@ -374,16 +374,20 @@ static int vaccel_time_slicing_open(struct mdev_device *mdev)
 static int vaccel_time_slicing_close(struct mdev_device *mdev)
 {
     struct vaccel *vaccel = mdev_get_drvdata(mdev);
+    int idx;
 
     vaccel_info(vaccel, "call: %s\n", __func__);
 
     vaccel->enabled = false;
     vfio_unregister_notifier(mdev_dev(mdev), VFIO_GROUP_NOTIFY,
                 &vaccel->group_notifier);
+
+    idx = srcu_read_lock(&vaccel->kvm->srcu);
     iommu_unmap_region(vaccel->fisor->domain,
                 vaccel->fisor->iommu_map_flags,
                 vaccel->iova_start,
                 SIZE_64G >> PAGE_SHIFT);
+    srcu_read_unlock(&vaccel->kvm->srcu, idx);
 
     do_vaccel_bar_cleanup(vaccel);
 
