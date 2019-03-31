@@ -91,6 +91,7 @@ void iommu_unmap_region(struct iommu_domain *domain,
     for (; idx < idx_end; idx += PAGE_SIZE) {
         if (iommu_iova_to_phys(domain, idx)) {
             iommu_unmap(domain, idx, PAGE_SIZE);
+            kvm_release_pfn_clean(pfn);
             cnt++;
         }
     }
