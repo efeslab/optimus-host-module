@@ -201,6 +201,60 @@ int vaccel_handle_bar2_write(struct vaccel *vaccel, u32 offset, u64 val)
 
         break;
     }
+    case 0x38: /* FAST_PAGING_MAP */
+    {
+        int ret, idx, i, full_size;
+        uint64_t notifier_gpa = val;
+        uint64_t gva_iter;
+        struct vaccel_fast_paging_notifier notifier, *notifier_full = NULL;
+
+        ret = vaccel_read_gpa(vaccel, notifier_gpa, &notifier, sizeof(notifier));
+        if (ret) {
+            vaccel_err(vaccel, "%s: read gpa error", __func__);
+            return ret;
+        }
+
+        if (!PAGE_ALIGNED(notifier.gva_start_addr)) {
+            vaccel_err(vaccel, "%s: not page alligned", __func__);
+            return ret;
+        }
+
+        if (notifier.behavior == 0) { /* 0 for map */
+            full_size = sizeof(notifier) + sizeof(uint64_t) * notifier.num_pages;
+            notifier_full = kmalloc(full_size, GFP_KERNEL);
+            ret = vaccel_read_gpa(vaccel, notifier_gpa, notifier_full, full_size);
+            if (ret) {
+                vaccel_err(vaccel, "%s: read gpa error", __func__);
+                return ret;
+            }
+
+            vaccel_info(vaccel, "fast paging map: %d pages", notifier.num_pages);
+
+            idx = srcu_read_lock(&vaccel->kvm->srcu);
+            gva_iter = notifier.gva_start_addr;
+            for (i = 0; i < notifier.num_pages; i++) {
+                vaccel_iommu_page_map(vaccel, notifier_full->gpas[i], gva_iter);
+                gva_iter += PAGE_SIZE;
+            }
+            srcu_read_unlock(&vaccel->kvm->srcu, idx);
+
+            kfree(notifier_full);
+            notifier_full = NULL;
+        }
+        else { /* 1 for unmap */
+            vaccel_info(vaccel, "fast paging unmap: %d pages", notifier.num_pages);
+
+            idx = srcu_read_lock(&vaccel->kvm->srcu);
+            gva_iter = notifier.gva_start_addr;
+            for (i = 0; i < notifier.num_pages; i++) {
+                vaccel_iommu_page_unmap(vaccel, gva_iter);
+                gva_iter += PAGE_SIZE;
+            }
+            srcu_read_unlock(&vaccel->kvm->srcu, idx);
+        }
+
+        break;
+    }
     case 0x10: /* MEM_BASE */
     {
         u64 mux_offset;

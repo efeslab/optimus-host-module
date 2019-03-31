@@ -32,6 +32,7 @@
 #include <linux/delay.h>
 #include <linux/atomic.h>
 
+#define PAGE_ALIGNED(addr) IS_ALIGNED((unsigned long)(addr), PAGE_SIZE)
 
 #define VERSION_STRING  "0.1"
 #define DRIVER_AUTHOR   "Jiacheng Ma"
@@ -221,6 +222,13 @@ struct vaccel_paging_notifier {
     uint64_t pa;
 };
 
+struct vaccel_fast_paging_notifier {
+    uint32_t num_pages;
+    uint32_t behavior;
+    uint64_t gva_start_addr;
+    uint64_t gpas[0];
+};
+
 void dump_buffer_32(char *buf, uint32_t count);
 void dump_buffer_64(char *buf, uint32_t count);
 
@@ -253,6 +261,7 @@ int vaccel_group_notifier(struct notifier_block *nb,
 
 int kthread_watch_time(void *fisor_param);
 
+#ifdef FISOR_DBG
 #define fisor_err(fmt, args...) \
     pr_err("fisor: "fmt, ##args);
 #define fisor_info(fmt, args...) \
@@ -267,5 +276,15 @@ int kthread_watch_time(void *fisor_param);
     pr_err("vaccel[%d]: "fmt, vaccel->seq_id, ##args)
 #define vaccel_info(vaccel, fmt, args...) \
     pr_info("vaccel[%d]: "fmt, vaccel->seq_id, ##args)
+#else
+#define fisor_err(fmt, args...)
+#define fisor_info(fmt, args...)
+
+#define paccel_err(paccel, fmt, args...)
+#define paccel_info(paccel, fmt, args...)
+
+#define vaccel_err(vaccel, fmt, args...)
+#define vaccel_info(vaccel, fmt, args...)
+#endif
 
 #endif /* _VAI_INTERNAL_H_ */
