@@ -913,7 +913,7 @@ static int fisor_probe(struct fisor *fisor, u32 *ndirect, u32 *nts)
             fisor->paccels[i].timeslc.total = 4;
             fisor->paccels[i].timeslc.occupied = 0;
             fisor->paccels[i].timeslc.policy =
-                    PACCEL_TS_POLICY_RR;
+                    PACCEL_TS_POLICY_FAIR_ABORT;
             INIT_LIST_HEAD(&fisor->paccels[i].timeslc.children);
             fisor->paccels[i].timeslc.curr = NULL;
             fisor->paccels[i].ops = &paccel_time_slicing_ops;

@@ -143,7 +143,7 @@ typedef enum {
     PACCEL_TS_POLICY_FAIR_NOTIFY
 } paccel_ts_sched_policy_t;
 
-#define PACCEL_TS_MAX_PERIOD_MS 20000
+#define PACCEL_TS_MAX_PERIOD_MS 8000
 
 struct paccel {
     struct fisor *fisor;
@@ -260,6 +260,8 @@ int vaccel_group_notifier(struct notifier_block *nb,
             long unsigned int action, void *data);
 
 int kthread_watch_time(void *fisor_param);
+
+#define FISOR_DBG
 
 #ifdef FISOR_DBG
 #define fisor_err(fmt, args...) \

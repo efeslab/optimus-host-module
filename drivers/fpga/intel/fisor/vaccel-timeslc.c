@@ -176,6 +176,8 @@ static inline void vaccel_record_stop(struct paccel *paccel, struct vaccel *vacc
 {
     fisor_info("kthread: De-schedule vaccel %d on paccel %d \n",
             vaccel->seq_id, paccel->accel_id);
+    fisor_info("kthread: Vaccel %d cumulative running time = %llu ms \n",
+            vaccel->seq_id, vaccel->timeslc.running_time);
     vaccel->timeslc.start_time = 0;
     vaccel->timeslc.trans_status = VACCEL_TRANSACTION_IDLE;
     STORE_LE64((u64*)&vaccel->bar[VACCEL_BAR_0][FISOR_TRANS_CTL],
@@ -307,27 +309,26 @@ static void paccel_schedule_fair_abort(struct paccel *paccel)
         run_duration = (jiffies -
                 curr->timeslc.start_time) * 1000 / HZ;
 
-        /* If hw is still busy, check max running period */
-        if (!fisor_hw_check_idle(paccel)) {
-            if (run_duration <= PACCEL_TS_MAX_PERIOD_MS) {
-                fisor_info("kthread: vaccel %d still runs on paccel\
-                        %d \n", curr->seq_id, paccel->accel_id);
-                mutex_unlock(&paccel->ops_lock);
-                return;
-            }
-            else {
-                fisor_info("kthread: vaccel %d runs on paccel %d\
-                        for %llu ms, timeout \n",curr->seq_id,
-                        paccel->accel_id, run_duration);
-                curr->timeslc.running_time += run_duration;
-                vaccel_record_abort(paccel, curr);
-            }
-        }
-
         if (run_duration < 10) {
             /* Give hardware enough time */
             mutex_unlock(&paccel->ops_lock);
             return;
+        }
+
+        /* If hw is still busy, check max running period */
+        if (!fisor_hw_check_idle(paccel)) {
+            if (run_duration <= PACCEL_TS_MAX_PERIOD_MS) {
+                fisor_info("kthread: vaccel %d still runs on paccel "
+                        "%d \n", curr->seq_id, paccel->accel_id);
+                mutex_unlock(&paccel->ops_lock);
+                return;
+            }
+            else {
+                fisor_info("kthread: vaccel %d runs on paccel %d "
+                        "for %llu ms, timeout \n",curr->seq_id,
+                        paccel->accel_id, run_duration);
+                vaccel_record_abort(paccel, curr);
+            }
         }
 
         curr->timeslc.running_time += run_duration;
