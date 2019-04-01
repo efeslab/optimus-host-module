@@ -327,6 +327,7 @@ static void paccel_schedule_fair_abort(struct paccel *paccel)
                 fisor_info("kthread: vaccel %d runs on paccel %d "
                         "for %llu ms, timeout \n",curr->seq_id,
                         paccel->accel_id, run_duration);
+                do_paccel_soft_reset(paccel, false);
                 vaccel_record_abort(paccel, curr);
             }
         }
@@ -354,10 +355,11 @@ static void paccel_schedule_fair_abort(struct paccel *paccel)
     }
 
     next_round:
-    // paccel_info(paccel, "has these vaccel: \n");
+    paccel_info(paccel, "has these vaccel: \n");
 
     list_for_each_entry_safe(vaccel, tmp_v, &paccel->timeslc.children, timeslc.paccel_next) {
-    //    paccel_info(paccel, "vaccel %d \n", vaccel->seq_id);
+        paccel_info(paccel, "vaccel %d: total running time %lld \n", 
+                vaccel->seq_id, vaccel->timeslc.running_time);
         if (vaccel->timeslc.trans_status == VACCEL_TRANSACTION_STARTED) {
             vaccel_record_run(paccel, vaccel);
             return;
@@ -388,6 +390,8 @@ int kthread_watch_time(void *fisor_param)
 
         fisor->user_check_signal = 0;
 
+        mutex_lock(&fisor->ops_lock);
+
         for (i = 0; i < npaccels; i++) {
 
             paccel = &paccels[i];
@@ -410,6 +414,8 @@ int kthread_watch_time(void *fisor_param)
 
             mutex_unlock(&paccel->ops_lock);
         }
+
+        mutex_unlock(&fisor->ops_lock);
 
         set_current_state(TASK_INTERRUPTIBLE);
 
