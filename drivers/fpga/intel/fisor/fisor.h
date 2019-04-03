@@ -30,6 +30,7 @@
 #include <linux/iommu.h>
 #include <linux/kthread.h>
 #include <linux/atomic.h>
+#include <linux/hugetlb.h>
 
 #define PGSHIFT_4K 12                                                                                                                                                                                                                                      
 #define PGSHIFT_2M 21                                                                                                                                                                                                                                      
@@ -242,8 +243,8 @@ struct fisor* device_to_fisor(struct device *pafu);
 void iommu_unmap_region(struct iommu_domain *domain,
                 int flags, u64 start, u64 npages);
 int vaccel_iommu_page_map(struct vaccel *vaccel,
-            u64 gpa, u64 gva);
-void vaccel_iommu_page_unmap(struct vaccel *vaccel, u64 gva);
+            u64 gpa, u64 gva, u64 pgsize);
+void vaccel_iommu_page_unmap(struct vaccel *vaccel, u64 gva, u64 pgsize);
 
 void dump_paccels(struct fisor *fisor);
 
@@ -256,30 +257,22 @@ int vaccel_handle_bar2_write(struct vaccel *vaccel,
 int vaccel_group_notifier(struct notifier_block *nb,
             long unsigned int action, void *data);
 
-#ifdef FISOR_DBG
+extern int fisor_dbg;
+extern unsigned long long tlb_opt_offset;
+
 #define fisor_err(fmt, args...) \
-    pr_err("fisor: "fmt, ##args);
+    if (fisor_dbg) {pr_err("fisor: "fmt, ##args);}
 #define fisor_info(fmt, args...) \
-    pr_info("fisor: "fmt, ##args);
+    if (fisor_dbg) {pr_info("fisor: "fmt, ##args);}
 
 #define paccel_err(paccel, fmt, args...) \
-    pr_err("paccel[%d]: "fmt, paccel->accel_id, ##args)
+    if (fisor_dbg) {pr_err("paccel[%d]: "fmt, paccel->accel_id, ##args);}
 #define paccel_info(paccel, fmt, args...) \
-    pr_info("paccel[%d]: "fmt, paccel->accel_id, ##args)
+    if (fisor_dbg) {pr_info("paccel[%d]: "fmt, paccel->accel_id, ##args);}
 
 #define vaccel_err(vaccel, fmt, args...) \
-    pr_err("vaccel[%d]: "fmt, vaccel->seq_id, ##args)
+    if (fisor_dbg) {pr_err("vaccel[%d]: "fmt, vaccel->seq_id, ##args);}
 #define vaccel_info(vaccel, fmt, args...) \
-    pr_info("vaccel[%d]: "fmt, vaccel->seq_id, ##args)
-#else
-#define fisor_err(fmt, args...)
-#define fisor_info(fmt, args...)
-
-#define paccel_err(paccel, fmt, args...)
-#define paccel_info(paccel, fmt, args...)
-
-#define vaccel_err(vaccel, fmt, args...)
-#define vaccel_info(vaccel, fmt, args...)
-#endif
+    if (fisor_dbg) {pr_info("vaccel[%d]: "fmt, vaccel->seq_id, ##args);}
 
 #endif /* _VAI_INTERNAL_H_ */

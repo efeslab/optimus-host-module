@@ -3,8 +3,10 @@
 sudo modprobe vfio
 sudo modprobe vfio-mdev
 
-sudo insmod spi-nor-mod.ko
-sudo insmod fpga-mgr-mod.ko
-sudo insmod intel-fpga-pci.ko
-sudo insmod intel-fpga-afu.ko
-sudo insmod intel-fpga-fme.ko
+sudo dmesg -C
+CURDIR=$(dirname $0)
+sudo insmod ${CURDIR}/spi-nor-mod.ko
+sudo insmod ${CURDIR}/fpga-mgr-mod.ko
+sudo insmod ${CURDIR}/intel-fpga-pci.ko
+sudo insmod ${CURDIR}/intel-fpga-afu.ko fisor_dbg=1 tlb_opt_offset=32768
+sudo insmod ${CURDIR}/intel-fpga-fme.ko
