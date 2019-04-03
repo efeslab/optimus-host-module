@@ -30,7 +30,7 @@ int vaccel_iommu_page_map(struct vaccel *vaccel,
 {
     struct kvm *kvm = vaccel->kvm;
     gfn_t gfn = gpa >> PAGE_SHIFT;
-    kvm_pfn_t pfn = gfn_to_pfn(kvm, gfn);
+    kvm_pfn_t pfn = gfn_to_pfn(kvm, gfn), old_pfn;
     struct iommu_domain *domain = vaccel->fisor->domain;
     int flags = vaccel->fisor->iommu_map_flags;
     u64 host_pgsize = kvm_host_page_size(kvm, gfn);
@@ -70,8 +70,10 @@ int vaccel_iommu_page_map(struct vaccel *vaccel,
     }
 
     gva = gva - vaccel->gva_start + vaccel->iova_start;
-    if (iommu_iova_to_phys(domain, gva)) {
+    old_pfn = iommu_iova_to_phys(domain, gva);
+    if (old_pfn) {
         iommu_unmap(domain, gva, pgsize);
+        kvm_release_pfn_clean(old_pfn);
         vaccel_info(vaccel, "%s: clear already mapped\n", __func__);
     }
 
