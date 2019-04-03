@@ -30,6 +30,7 @@
 #include <linux/iommu.h>
 #include <linux/kthread.h>
 #include <linux/atomic.h>
+#include <linux/hugetlb.h>
 
 #define PGSHIFT_4K 12                                                                                                                                                                                                                                      
 #define PGSHIFT_2M 21                                                                                                                                                                                                                                      
@@ -242,8 +243,8 @@ struct fisor* device_to_fisor(struct device *pafu);
 void iommu_unmap_region(struct iommu_domain *domain,
                 int flags, u64 start, u64 npages);
 int vaccel_iommu_page_map(struct vaccel *vaccel,
-            u64 gpa, u64 gva);
-void vaccel_iommu_page_unmap(struct vaccel *vaccel, u64 gva);
+            u64 gpa, u64 gva, u64 pgsize);
+void vaccel_iommu_page_unmap(struct vaccel *vaccel, u64 gva, u64 pgsize);
 
 void dump_paccels(struct fisor *fisor);
 

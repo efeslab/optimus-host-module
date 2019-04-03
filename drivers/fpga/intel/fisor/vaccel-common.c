@@ -1,7 +1,7 @@
 #include "afu.h"
 #include "fisor.h"
 
-static u64 kvm_host_page_size(struct kvm *kvm, gfn_t gfn)
+static u64 vaccel_kvm_host_page_size(struct kvm *kvm, gfn_t gfn)
 {
     struct vm_area_struct *vma;
     unsigned long addr, size;
@@ -33,13 +33,13 @@ int vaccel_iommu_page_map(struct vaccel *vaccel,
     kvm_pfn_t pfn = gfn_to_pfn(kvm, gfn);
     struct iommu_domain *domain = vaccel->fisor->domain;
     int flags = vaccel->fisor->iommu_map_flags;
-    u64 host_pgsize = kvm_host_page_size(kvm, gfn);
+    u64 host_pgsize = vaccel_kvm_host_page_size(kvm, gfn);
 
     fisor_info("%s: iommu map gva %llx to gpa %llx pgsize %llx\n",
                     __func__, gva, gpa, pgsize);
 
     if (host_pgsize < pgsize) {
-        u64 off;
+        u64 off, ret;
 
         fisor_info("%s: host page size less than guest page size", __func__);
         for (off = 0; off < pgsize; off += PAGE_SIZE) {
@@ -234,9 +234,9 @@ int vaccel_handle_bar2_write(struct vaccel *vaccel, u32 offset, u64 val)
          * will go through address translation */
         idx = srcu_read_lock(&vaccel->kvm->srcu);
         if (val == 0) { /* 0 for map */
-            vaccel_iommu_page_map(vaccel, notifier.pa, notifier.va);
+            vaccel_iommu_page_map(vaccel, notifier.pa, notifier.va, PAGE_SIZE);
         } else {
-            vaccel_iommu_page_unmap(vaccel, notifier.va);
+            vaccel_iommu_page_unmap(vaccel, notifier.va, PAGE_SIZE);
         }
         srcu_read_unlock(&vaccel->kvm->srcu, idx);
 
