@@ -256,7 +256,9 @@ int vaccel_handle_bar2_write(struct vaccel *vaccel,
 
 int vaccel_group_notifier(struct notifier_block *nb,
             long unsigned int action, void *data);
+
 extern int fisor_dbg;
+extern unsigned long long tlb_opt_offset;
 
 #define fisor_err(fmt, args...) \
     if (fisor_dbg) {pr_err("fisor: "fmt, ##args);}
