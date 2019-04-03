@@ -982,7 +982,7 @@ int fpga_register_afu_mdev_device(struct platform_device *pdev)
     u32 ndirect, nts;
     u64 guidl, guidh;
 
-    fisor_info("registering!\n");
+    printk("fisor: registering, fisor_dbg=%d, tlb_opt_offset=%#llx\n", fisor_dbg, tlb_opt_offset);
 
     mutex_lock(&pdata->lock);
 	if (pdata->disable_count) {
