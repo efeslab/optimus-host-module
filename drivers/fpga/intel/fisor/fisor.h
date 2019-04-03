@@ -31,7 +31,24 @@
 #include <linux/kthread.h>
 #include <linux/atomic.h>
 
-#define PAGE_ALIGNED(addr) IS_ALIGNED((unsigned long)(addr), PAGE_SIZE)
+#define PGSHIFT_4K 12                                                                                                                                                                                                                                      
+#define PGSHIFT_2M 21                                                                                                                                                                                                                                      
+#define PGSHIFT_1G 30                                                                                                                                                                                                                                      
+
+#define PGSIZE_4K (1UL << PGSHIFT_4K)                                                                                                                                                                                                                      
+#define PGSIZE_2M (1UL << PGSHIFT_2M)                                                                                                                                                                                                                      
+#define PGSIZE_1G (1UL << PGSHIFT_1G)                                                                                                                                                                                                                      
+
+#define PGSIZE_FLAG_4K (1 << 0)                                                                                                                                                                                                                            
+#define PGSIZE_FLAG_2M (1 << 1)                                                                                                                                                                                                                            
+#define PGSIZE_FLAG_1G (1 << 2)                                                                                                                                                                                                                            
+                                                                                                                                                                                                                                                           
+#define MAP_BEHAVISOR_MAP 0x0                                                                                                                                                                                                                              
+#define MAP_BEHAVISOR_UNMAP 0x1
+
+#define PAGE4K_ALIGNED(addr) IS_ALIGNED((unsigned long)(addr), PGSIZE_4K)
+#define PAGE2M_ALIGNED(addr) IS_ALIGNED((unsigned long)(addr), PGSIZE_2M)
+#define PAGE1G_ALIGNED(addr) IS_ALIGNED((unsigned long)(addr), PGSIZE_1G)
 
 #define VERSION_STRING  "0.1"
 #define DRIVER_AUTHOR   "Jiacheng Ma"
@@ -203,7 +220,8 @@ struct vaccel_paging_notifier {
 
 struct vaccel_fast_paging_notifier {
     uint32_t num_pages;
-    uint32_t behavior;
+    uint16_t behavior;
+    uint16_t pgsize_flag;
     uint64_t gva_start_addr;
     uint64_t gpas[0];
 };
