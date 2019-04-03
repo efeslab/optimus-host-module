@@ -1,5 +1,13 @@
+#include <linux/moduleparam.h>
 #include "afu.h"
 #include "fisor.h"
+int fisor_dbg = 0;
+module_param(fisor_dbg, int, 0664);
+MODULE_PARM_DESC(fisor_dbg, "enable debug info, default: 0");
+static unsigned long long tlb_opt_offset = 0;
+module_param(tlb_opt_offset, ullong, 0664);
+MODULE_PARM_DESC(tlb_opt_offset, "number of 4k pages offset applied after page slicing, default: 0");
+//FIXME: replace previous hardcoded offset with tlb_opt_offset
 
 DEFINE_MUTEX(fisor_list_lock);
 struct list_head fisor_list = LIST_HEAD_INIT(fisor_list);
