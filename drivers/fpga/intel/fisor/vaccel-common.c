@@ -30,7 +30,7 @@ int vaccel_iommu_page_map(struct vaccel *vaccel,
 {
     struct kvm *kvm = vaccel->kvm;
     gfn_t gfn = gpa >> PAGE_SHIFT;
-    kvm_pfn_t pfn = gfn_to_pfn(kvm, gfn), old_pfn;
+    kvm_pfn_t pfn, old_pfn;
     struct iommu_domain *domain = vaccel->fisor->domain;
     int flags = vaccel->fisor->iommu_map_flags;
     u64 host_pgsize = vaccel_kvm_host_page_size(kvm, gfn);
@@ -52,6 +52,8 @@ int vaccel_iommu_page_map(struct vaccel *vaccel,
         }
         return ret;
     }
+
+    pfn = gfn_to_pfn(kvm, gfn);
 
     /* add to IOMMU */
     if (!IS_ALIGNED((unsigned long)(gva), pgsize)) {
