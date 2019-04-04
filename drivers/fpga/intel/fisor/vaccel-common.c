@@ -70,7 +70,7 @@ int vaccel_iommu_page_map(struct vaccel *vaccel,
     }
 
     gva = gva - vaccel->gva_start + vaccel->iova_start;
-    old_pfn = iommu_iova_to_phys(domain, gva);
+    old_pfn = (iommu_iova_to_phys(domain, gva) >> PAGE_SHIFT);
     if (old_pfn) {
         iommu_unmap(domain, gva, pgsize);
         kvm_release_pfn_clean(old_pfn);
@@ -105,7 +105,7 @@ void vaccel_iommu_page_unmap(struct vaccel *vaccel, u64 gva, u64 pgsize)
     }
 
     gva = gva - vaccel->gva_start + vaccel->iova_start;
-    pfn = iommu_iova_to_phys(domain, gva);
+    pfn = (iommu_iova_to_phys(domain, gva) >> PAGE_SHIFT);
     
     if (pfn) {
         r = iommu_unmap(domain, gva, pgsize);
