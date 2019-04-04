@@ -48,7 +48,7 @@ uint64_t address_after_hijack(uint64_t addr, uint64_t pgsize)
 
     uint64_t lo = (addr >> lo_off) & 0xf;
     uint64_t hi = (addr >> hi_off) & 0xf;
-    uint64_t mask = ~((0xf << lo_off) | (0xf << hi_off));
+    uint64_t mask = ~((0xfLLU << lo_off) | (0xfLLU << hi_off));
 
     new_addr &= mask;
     new_addr |= (lo << hi_off);
