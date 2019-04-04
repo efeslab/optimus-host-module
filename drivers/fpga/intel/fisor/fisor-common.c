@@ -90,9 +90,12 @@ void iommu_unmap_region(struct iommu_domain *domain,
     idx = start;
     idx_end = start + npages * PAGE_SIZE;
     for (; idx < idx_end; idx += PAGE_SIZE) {
-        pfn = (iommu_iova_to_phys(domain, idx) >> PAGE_SHIFT);
+        /* FIXME */
+        long new_idx = address_after_hijack(idx, PAGE_SIZE);
+        
+        pfn = (iommu_iova_to_phys(domain, new_idx) >> PAGE_SHIFT);
         if (pfn) {
-            iommu_unmap(domain, idx, PAGE_SIZE);
+            iommu_unmap(domain, new_idx, PAGE_SIZE);
             kvm_release_pfn_clean(pfn);
             cnt++;
         }

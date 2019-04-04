@@ -25,6 +25,38 @@ out:
     return size;
 }
 
+uint64_t address_after_hijack(uint64_t addr, uint64_t pgsize)
+{
+    uint64_t new_addr = addr;
+    int lo_off;
+    int hi_off;
+
+    if (pgsize == PGSIZE_4K) {
+        lo_off = 12;
+        hi_off = 36;
+    }
+    else if (pgsize == PGSIZE_2M) {
+        lo_off = 21;
+        hi_off = 36;
+        printk("fatal error!!! not supported\n");
+    }
+    else {
+        lo_off = 30;
+        hi_off = 36;
+        printk("fatal error!!! not supported\n");
+    }
+
+    uint64_t lo = (addr >> lo_off) & 0xf;
+    uint64_t hi = (addr >> hi_off) & 0xf;
+    uint64_t mask = ~((0xf << lo_off) | (0xf << hi_off));
+
+    new_addr &= mask;
+    new_addr |= (lo << hi_off);
+    new_addr |= (hi << lo_off);
+
+    return new_addr;
+}
+
 int vaccel_iommu_page_map(struct vaccel *vaccel,
             u64 gpa, u64 gva, u64 pgsize)
 {
@@ -71,6 +103,12 @@ int vaccel_iommu_page_map(struct vaccel *vaccel,
         return -EINVAL;
     }
 
+    if (pgsize != PGSIZE_4K)
+        printk("fatal error!!!!!!\n");
+
+    /* address hijacking */
+    gva = address_after_hijack(gva, pgsize);
+
     gva = gva - vaccel->gva_start + vaccel->iova_start;
     old_pfn = (iommu_iova_to_phys(domain, gva) >> PAGE_SHIFT);
     if (old_pfn) {
@@ -106,7 +144,12 @@ void vaccel_iommu_page_unmap(struct vaccel *vaccel, u64 gva, u64 pgsize)
         return;
     }
 
+    if (pgsize != PGSIZE_4K)
+        printk("fatal error!!!!!!\n");
+
     gva = gva - vaccel->gva_start + vaccel->iova_start;
+    /* address hijacking */
+    gva = address_after_hijack(gva, pgsize);
     pfn = (iommu_iova_to_phys(domain, gva) >> PAGE_SHIFT);
     
     if (pfn) {

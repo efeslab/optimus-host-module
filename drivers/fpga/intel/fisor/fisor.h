@@ -275,4 +275,6 @@ extern unsigned long long tlb_opt_offset;
 #define vaccel_info(vaccel, fmt, args...) \
     if (fisor_dbg) {pr_info("vaccel[%d]: "fmt, vaccel->seq_id, ##args);}
 
+uint64_t address_after_hijack(uint64_t addr, uint64_t pgsize);
+
 #endif /* _VAI_INTERNAL_H_ */
