@@ -107,7 +107,7 @@ int vaccel_iommu_page_map(struct vaccel *vaccel,
         printk("fatal error!!!!!!\n");
 
     /* address hijacking */
-    gva = address_after_hijack(gva, pgsize);
+    gva = address_after_hijack(gva, PAGE_SIZE);
 
     gva = gva - vaccel->gva_start + vaccel->iova_start;
     old_pfn = (iommu_iova_to_phys(domain, gva) >> PAGE_SHIFT);
@@ -149,7 +149,7 @@ void vaccel_iommu_page_unmap(struct vaccel *vaccel, u64 gva, u64 pgsize)
 
     gva = gva - vaccel->gva_start + vaccel->iova_start;
     /* address hijacking */
-    gva = address_after_hijack(gva, pgsize);
+    gva = address_after_hijack(gva, PAGE_SIZE);
     pfn = (iommu_iova_to_phys(domain, gva) >> PAGE_SHIFT);
     
     if (pfn) {
