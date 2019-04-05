@@ -25,36 +25,13 @@ out:
     return size;
 }
 
-uint64_t address_after_hijack(uint64_t addr, uint64_t pgsize)
+uint64_t address_after_hijack_2m(struct paccel *paccel, uint64_t addr)
 {
-    uint64_t new_addr = addr;
-    int lo_off;
-    int hi_off;
+    uint64_t hi = (addr & ~(PGSIZE_2M - 1)) << 4;
+    uint64_t off = addr & (PGSIZE_2M - 1);
+    uint64_t idx = (paccel->accel_id & 0xf) << PGSHIFT_2M;
 
-    if (pgsize == PGSIZE_4K) {
-        lo_off = 12;
-        hi_off = 36;
-    }
-    else if (pgsize == PGSIZE_2M) {
-        lo_off = 21;
-        hi_off = 36;
-        printk("fatal error!!! not supported\n");
-    }
-    else {
-        lo_off = 30;
-        hi_off = 36;
-        printk("fatal error!!! not supported\n");
-    }
-
-    uint64_t lo = (addr >> lo_off) & 0xf;
-    uint64_t hi = (addr >> hi_off) & 0xf;
-    uint64_t mask = ~((0xfLLU << lo_off) | (0xfLLU << hi_off));
-
-    new_addr &= mask;
-    new_addr |= (lo << hi_off);
-    new_addr |= (hi << lo_off);
-
-    return new_addr;
+    return (hi | off | idx);
 }
 
 int vaccel_iommu_page_map(struct vaccel *vaccel,
@@ -103,12 +80,14 @@ int vaccel_iommu_page_map(struct vaccel *vaccel,
         return -EINVAL;
     }
 
-    if (pgsize != PGSIZE_4K)
-        printk("fatal error!!!!!!\n");
+    if (pgsize != PGSIZE_2M) {
+        vaccel_err(vaccel, "%s: fatal error! unsupported page size in this branch\n", __func__);
+        return -EINVAL;
+    }
 
     gva = gva - vaccel->gva_start + vaccel->iova_start;
     /* address hijacking */
-    gva = address_after_hijack(gva, PAGE_SIZE);
+    gva = address_after_hijack_2m(vaccel->paccel, gva);
     old_pfn = (iommu_iova_to_phys(domain, gva) >> PAGE_SHIFT);
     if (old_pfn) {
         iommu_unmap(domain, gva, pgsize);
@@ -143,12 +122,14 @@ void vaccel_iommu_page_unmap(struct vaccel *vaccel, u64 gva, u64 pgsize)
         return;
     }
 
-    if (pgsize != PGSIZE_4K)
-        printk("fatal error!!!!!!\n");
+    if (pgsize != PGSIZE_2M) {
+        vaccel_err(vaccel, "%s: fatal error! unsupported page size in this branch\n", __func__);
+        return;
+    }
 
     gva = gva - vaccel->gva_start + vaccel->iova_start;
     /* address hijacking */
-    gva = address_after_hijack(gva, PAGE_SIZE);
+    gva = address_after_hijack_2m(vaccel->paccel, gva);
     pfn = (iommu_iova_to_phys(domain, gva) >> PAGE_SHIFT);
     
     if (pfn) {

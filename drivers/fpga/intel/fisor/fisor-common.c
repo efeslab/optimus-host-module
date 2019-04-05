@@ -79,7 +79,7 @@ struct fisor* mdev_to_fisor(struct mdev_device *mdev)
 }
 
 void iommu_unmap_region(struct iommu_domain *domain,
-                int flags, u64 start, u64 npages)
+            struct paccel *paccel, int flags, u64 start, u64 npages)
 {
     long idx, idx_end;
     kvm_pfn_t pfn;
@@ -89,13 +89,13 @@ void iommu_unmap_region(struct iommu_domain *domain,
 
     idx = start;
     idx_end = start + npages * PAGE_SIZE;
-    for (; idx < idx_end; idx += PAGE_SIZE) {
-        /* FIXME */
-        long new_idx = address_after_hijack(idx, PAGE_SIZE);
+    for (; idx < idx_end; idx += PGSIZE_2M) {
+        /* FIXME: add mediator for 4k and 2m */
+        long new_idx = address_after_hijack_2m(paccel, idx);
         
         pfn = (iommu_iova_to_phys(domain, new_idx) >> PAGE_SHIFT);
         if (pfn) {
-            iommu_unmap(domain, new_idx, PAGE_SIZE);
+            iommu_unmap(domain, new_idx, PGSIZE_2M);
             kvm_release_pfn_clean(pfn);
             cnt++;
         }

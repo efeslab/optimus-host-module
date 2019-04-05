@@ -241,7 +241,7 @@ struct fisor* pdev_to_fisor(struct platform_device *pdev);
 struct fisor* device_to_fisor(struct device *pafu);
 
 void iommu_unmap_region(struct iommu_domain *domain,
-                int flags, u64 start, u64 npages);
+                struct paccel *paccel, int flags, u64 start, u64 npages);
 int vaccel_iommu_page_map(struct vaccel *vaccel,
             u64 gpa, u64 gva, u64 pgsize);
 void vaccel_iommu_page_unmap(struct vaccel *vaccel, u64 gva, u64 pgsize);
@@ -275,6 +275,6 @@ extern unsigned long long tlb_opt_offset;
 #define vaccel_info(vaccel, fmt, args...) \
     if (fisor_dbg) {pr_info("vaccel[%d]: "fmt, vaccel->seq_id, ##args);}
 
-uint64_t address_after_hijack(uint64_t addr, uint64_t pgsize);
+uint64_t address_after_hijack_2m(struct paccel *paccel, uint64_t addr);
 
 #endif /* _VAI_INTERNAL_H_ */

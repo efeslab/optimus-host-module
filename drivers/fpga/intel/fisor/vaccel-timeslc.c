@@ -384,6 +384,7 @@ static int vaccel_time_slicing_close(struct mdev_device *mdev)
 
     idx = srcu_read_lock(&vaccel->kvm->srcu);
     iommu_unmap_region(vaccel->fisor->domain,
+                vaccel->paccel,
                 vaccel->fisor->iommu_map_flags,
                 vaccel->iova_start,
                 SIZE_64G >> PAGE_SHIFT);
