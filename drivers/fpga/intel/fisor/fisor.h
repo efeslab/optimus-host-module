@@ -103,6 +103,12 @@ struct fisor {
 #define FISOR_TRANS_CTL_FINISH 2
 #define FISOR_TRANS_CTL_ABORT 3
 #define FISOR_TRANS_CTL_PAUSE 4
+#define FISOR_TRANS_CTL_CONT 5
+#define FISOR_TRANS_CTL_REQUEST_PAUSE 6
+
+#define FISOR_TRANS_CTL_PAUSE_WAIT_MS 100
+
+#define FISOR_STATE_SZ 0x20
 
 enum {
     VACCEL_BAR_0,
@@ -167,6 +173,7 @@ struct paccel {
             paccel_ts_sched_policy_t policy;
             struct list_head children;
             struct vaccel *curr;
+            u64 state_sz;
         } timeslc;
     };
 
