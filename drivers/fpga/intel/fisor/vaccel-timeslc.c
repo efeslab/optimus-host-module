@@ -200,7 +200,7 @@ static inline void vaccel_record_stop(struct paccel *paccel, struct vaccel *vacc
     vaccel->timeslc.start_time = 0;
     vaccel->timeslc.trans_status = VACCEL_TRANSACTION_IDLE;
     STORE_LE64((u64*)&vaccel->bar[VACCEL_BAR_0][FISOR_TRANS_CTL],
-            FISOR_TRANS_CTL_IDLE);
+            FISOR_TRANS_CTL_FINISH);
     paccel->timeslc.curr = NULL;
 }
 
