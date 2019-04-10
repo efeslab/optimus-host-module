@@ -82,6 +82,7 @@ void iommu_unmap_region(struct iommu_domain *domain,
                 int flags, u64 start, u64 npages)
 {
     long idx, idx_end;
+    kvm_pfn_t pfn;
     u64 cnt = 0;
 
     fisor_info("unmap iommu region start %llx pages %llx\n", start, npages);
@@ -89,7 +90,8 @@ void iommu_unmap_region(struct iommu_domain *domain,
     idx = start;
     idx_end = start + npages * PAGE_SIZE;
     for (; idx < idx_end; idx += PAGE_SIZE) {
-        if (iommu_iova_to_phys(domain, idx)) {
+        pfn = iommu_iova_to_phys(domain, idx);
+        if (pfn) {
             iommu_unmap(domain, idx, PAGE_SIZE);
             kvm_release_pfn_clean(pfn);
             cnt++;

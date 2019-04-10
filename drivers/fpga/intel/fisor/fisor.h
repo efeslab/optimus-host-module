@@ -87,6 +87,7 @@ struct fisor {
 };
 
 #define SIZE_64G (64*1024*1024*1024LLU)
+#define SIZE_4K 4096LLU
 
 #define FISOR_BAR_0_SIZE 0x1000
 #define FISOR_BAR_2_SIZE 0x100
