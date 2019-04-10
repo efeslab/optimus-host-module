@@ -1,26 +1,69 @@
 #include "afu.h"
 #include "fisor.h"
 
+static u64 vaccel_kvm_host_page_size(struct kvm *kvm, gfn_t gfn)
+{
+    struct vm_area_struct *vma;
+    unsigned long addr, size;
+
+    size = PAGE_SIZE;
+
+    addr = gfn_to_hva(kvm, gfn);
+    if (kvm_is_error_hva(addr))
+        return PAGE_SIZE;
+
+    down_read(&current->mm->mmap_sem);
+    vma = find_vma(current->mm, addr);
+    if (!vma)
+        goto out;
+
+    size = vma_kernel_pagesize(vma);
+
+out:
+    up_read(&current->mm->mmap_sem);
+
+    return size;
+}
+
 int vaccel_iommu_page_map(struct vaccel *vaccel,
-            u64 gpa, u64 gva)
+            u64 gpa, u64 gva, u64 pgsize)
 {
     struct kvm *kvm = vaccel->kvm;
     gfn_t gfn = gpa >> PAGE_SHIFT;
-    kvm_pfn_t pfn = gfn_to_pfn(kvm, gfn);
+    kvm_pfn_t pfn, old_pfn;
     struct iommu_domain *domain = vaccel->fisor->domain;
     int flags = vaccel->fisor->iommu_map_flags;
+    u64 host_pgsize = vaccel_kvm_host_page_size(kvm, gfn);
 
-    fisor_info("%s: iommu map gva %llx to gpa %llx\n", __func__, gva, gpa);
+    fisor_info("%s: iommu map gva %llx to gpa %llx pgsize %llx\n",
+                    __func__, gva, gpa, pgsize);
 
-    /* add to IOMMU */
-    if ((gva & 0xfff) != 0) {
-        vaccel_info(vaccel, "%s: err gva not aligned\n", __func__);
-        gva &= (~0xfff);
+    if (host_pgsize < pgsize) {
+        u64 off, ret;
+
+        fisor_info("%s: host page size less than guest page size", __func__);
+        for (off = 0; off < pgsize; off += PAGE_SIZE) {
+            ret = vaccel_iommu_page_map(vaccel, gpa + off, gva + off, PAGE_SIZE);
+
+            if (ret) {
+                fisor_err("%s: map failed", __func__);
+                break;
+            }
+        }
+        return ret;
     }
 
-    if ((vaccel->iova_start & 0xfff) != 0) {
+    pfn = gfn_to_pfn(kvm, gfn);
+
+    /* add to IOMMU */
+    if (!IS_ALIGNED((unsigned long)(gva), pgsize)) {
+        vaccel_info(vaccel, "%s: err gva not aligned\n", __func__);
+        return -EFAULT;
+    }
+
+    if (!IS_ALIGNED((unsigned long)(vaccel->iova_start), pgsize)) {
         vaccel_info(vaccel, "%s: err iova_start not aligned\n", __func__);
-        vaccel->iova_start &= (~0xfff);
+        return -EFAULT;
     }
 
     if (gva >= vaccel->gva_start + SIZE_64G) {
@@ -29,31 +72,33 @@ int vaccel_iommu_page_map(struct vaccel *vaccel,
     }
 
     gva = gva - vaccel->gva_start + vaccel->iova_start;
-    if (iommu_iova_to_phys(domain, gva)) {
-        iommu_unmap(domain, gva, PAGE_SIZE);
+    old_pfn = (iommu_iova_to_phys(domain, gva) >> PAGE_SHIFT);
+    if (old_pfn) {
+        iommu_unmap(domain, gva, pgsize);
+        kvm_release_pfn_clean(old_pfn);
         vaccel_info(vaccel, "%s: clear already mapped\n", __func__);
     }
 
     vaccel_info(vaccel, "iommu_map %llx ==> %llx ==> %llx\n", gva, gpa, pfn << PAGE_SHIFT);
 
     return iommu_map(vaccel->fisor->domain, gva,
-                        pfn << PAGE_SHIFT, PAGE_SIZE, flags);
+                        pfn << PAGE_SHIFT, pgsize, flags);
 }
 
-void vaccel_iommu_page_unmap(struct vaccel *vaccel, u64 gva)
+void vaccel_iommu_page_unmap(struct vaccel *vaccel, u64 gva, u64 pgsize)
 {
     kvm_pfn_t pfn;
     int r;
     struct iommu_domain *domain = vaccel->fisor->domain;
 
-    if ((gva & 0xfff) != 0) {
+    if (!IS_ALIGNED((unsigned long)(gva), pgsize)) {
         vaccel_info(vaccel, "%s: err gva not aligned\n", __func__);
-        gva &= (~0xfff);
+        return;
     }
 
-    if ((vaccel->iova_start & 0xfff) != 0) {
+    if (!IS_ALIGNED((unsigned long)(vaccel->iova_start), pgsize)) {
         vaccel_info(vaccel, "%s: err iova_start not aligned\n", __func__);
-        vaccel->iova_start &= (~0xfff);
+        return;
     }
 
     if (gva >= vaccel->gva_start + SIZE_64G) {
@@ -62,10 +107,10 @@ void vaccel_iommu_page_unmap(struct vaccel *vaccel, u64 gva)
     }
 
     gva = gva - vaccel->gva_start + vaccel->iova_start;
-    pfn = iommu_iova_to_phys(domain, gva);
+    pfn = (iommu_iova_to_phys(domain, gva) >> PAGE_SHIFT);
     
     if (pfn) {
-        r = iommu_unmap(domain, gva, PAGE_SIZE);
+        r = iommu_unmap(domain, gva, pgsize);
         kvm_release_pfn_clean(pfn);
     }
     else {
@@ -193,9 +238,9 @@ int vaccel_handle_bar2_write(struct vaccel *vaccel, u32 offset, u64 val)
          * will go through address translation */
         idx = srcu_read_lock(&vaccel->kvm->srcu);
         if (val == 0) { /* 0 for map */
-            vaccel_iommu_page_map(vaccel, notifier.pa, notifier.va);
+            vaccel_iommu_page_map(vaccel, notifier.pa, notifier.va, PAGE_SIZE);
         } else {
-            vaccel_iommu_page_unmap(vaccel, notifier.va);
+            vaccel_iommu_page_unmap(vaccel, notifier.va, PAGE_SIZE);
         }
         srcu_read_unlock(&vaccel->kvm->srcu, idx);
 
@@ -206,6 +251,7 @@ int vaccel_handle_bar2_write(struct vaccel *vaccel, u32 offset, u64 val)
         int ret, idx, i, full_size;
         uint64_t notifier_gpa = val;
         uint64_t gva_iter;
+        uint64_t pgsize;
         struct vaccel_fast_paging_notifier notifier, *notifier_full = NULL;
 
         ret = vaccel_read_gpa(vaccel, notifier_gpa, &notifier, sizeof(notifier));
@@ -214,9 +260,19 @@ int vaccel_handle_bar2_write(struct vaccel *vaccel, u32 offset, u64 val)
             return ret;
         }
 
-        if (!PAGE_ALIGNED(notifier.gva_start_addr)) {
+	    if (notifier.pgsize_flag == PGSIZE_FLAG_4K) {
+            pgsize = PGSIZE_4K;
+        }
+        else if (notifier.pgsize_flag == PGSIZE_FLAG_2M) {
+            pgsize = PGSIZE_2M;
+        }
+        else {
+            pgsize = PGSIZE_1G;
+        }
+
+        if (!IS_ALIGNED((unsigned long)(notifier.gva_start_addr), pgsize)) {
             vaccel_err(vaccel, "%s: not page alligned", __func__);
-            return ret;
+            return -EFAULT;
         }
 
         if (notifier.behavior == 0) { /* 0 for map */
@@ -228,13 +284,14 @@ int vaccel_handle_bar2_write(struct vaccel *vaccel, u32 offset, u64 val)
                 return ret;
             }
 
-            vaccel_info(vaccel, "fast paging map: %d pages", notifier.num_pages);
+            vaccel_info(vaccel, "fast paging map: %d pages, pgsize %#llx",
+                        notifier.num_pages, pgsize);
 
             idx = srcu_read_lock(&vaccel->kvm->srcu);
             gva_iter = notifier.gva_start_addr;
             for (i = 0; i < notifier.num_pages; i++) {
-                vaccel_iommu_page_map(vaccel, notifier_full->gpas[i], gva_iter);
-                gva_iter += PAGE_SIZE;
+                vaccel_iommu_page_map(vaccel, notifier_full->gpas[i], gva_iter, pgsize);
+                gva_iter += pgsize;
             }
             srcu_read_unlock(&vaccel->kvm->srcu, idx);
 
@@ -242,13 +299,14 @@ int vaccel_handle_bar2_write(struct vaccel *vaccel, u32 offset, u64 val)
             notifier_full = NULL;
         }
         else { /* 1 for unmap */
-            vaccel_info(vaccel, "fast paging unmap: %d pages", notifier.num_pages);
+            vaccel_info(vaccel, "fast paging unmap: %d pages, pgsize %#llx",
+                        notifier.num_pages, pgsize);
 
             idx = srcu_read_lock(&vaccel->kvm->srcu);
             gva_iter = notifier.gva_start_addr;
             for (i = 0; i < notifier.num_pages; i++) {
-                vaccel_iommu_page_unmap(vaccel, gva_iter);
-                gva_iter += PAGE_SIZE;
+                vaccel_iommu_page_unmap(vaccel, gva_iter, pgsize);
+                gva_iter += pgsize;
             }
             srcu_read_unlock(&vaccel->kvm->srcu, idx);
         }

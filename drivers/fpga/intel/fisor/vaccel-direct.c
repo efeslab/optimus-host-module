@@ -42,7 +42,7 @@ static int vaccel_direct_init(struct vaccel *vaccel,
     vaccel->gva_start = 0;
     vaccel->mdev = mdev;
     vaccel->seq_id = atomic_fetch_add(1, &fisor->next_seq_id);
-    vaccel->iova_start = vaccel->seq_id * SIZE_64G + vaccel->seq_id * SIZE_4K;
+    vaccel->iova_start = vaccel->seq_id * SIZE_64G + paccel->accel_id * tlb_opt_offset * PAGE_SIZE;
     vaccel->ops = &vaccel_direct_ops;
     vaccel->paging_notifier_gpa = 0;
     mutex_init(&vaccel->ops_lock);

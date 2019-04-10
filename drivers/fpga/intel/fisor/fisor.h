@@ -31,8 +31,26 @@
 #include <linux/kthread.h>
 #include <linux/delay.h>
 #include <linux/atomic.h>
+#include <linux/hugetlb.h>
 
-#define PAGE_ALIGNED(addr) IS_ALIGNED((unsigned long)(addr), PAGE_SIZE)
+#define PGSHIFT_4K 12                                                                                                                                                                                                                                      
+#define PGSHIFT_2M 21                                                                                                                                                                                                                                      
+#define PGSHIFT_1G 30                                                                                                                                                                                                                                      
+
+#define PGSIZE_4K (1UL << PGSHIFT_4K)                                                                                                                                                                                                                      
+#define PGSIZE_2M (1UL << PGSHIFT_2M)                                                                                                                                                                                                                      
+#define PGSIZE_1G (1UL << PGSHIFT_1G)                                                                                                                                                                                                                      
+
+#define PGSIZE_FLAG_4K (1 << 0)                                                                                                                                                                                                                            
+#define PGSIZE_FLAG_2M (1 << 1)                                                                                                                                                                                                                            
+#define PGSIZE_FLAG_1G (1 << 2)                                                                                                                                                                                                                            
+                                                                                                                                                                                                                                                           
+#define MAP_BEHAVISOR_MAP 0x0                                                                                                                                                                                                                              
+#define MAP_BEHAVISOR_UNMAP 0x1
+
+#define PAGE4K_ALIGNED(addr) IS_ALIGNED((unsigned long)(addr), PGSIZE_4K)
+#define PAGE2M_ALIGNED(addr) IS_ALIGNED((unsigned long)(addr), PGSIZE_2M)
+#define PAGE1G_ALIGNED(addr) IS_ALIGNED((unsigned long)(addr), PGSIZE_1G)
 
 #define VERSION_STRING  "0.1"
 #define DRIVER_AUTHOR   "Jiacheng Ma"
@@ -225,7 +243,8 @@ struct vaccel_paging_notifier {
 
 struct vaccel_fast_paging_notifier {
     uint32_t num_pages;
-    uint32_t behavior;
+    uint16_t behavior;
+    uint16_t pgsize_flag;
     uint64_t gva_start_addr;
     uint64_t gpas[0];
 };
@@ -246,8 +265,8 @@ struct fisor* device_to_fisor(struct device *pafu);
 void iommu_unmap_region(struct iommu_domain *domain,
                 int flags, u64 start, u64 npages);
 int vaccel_iommu_page_map(struct vaccel *vaccel,
-            u64 gpa, u64 gva);
-void vaccel_iommu_page_unmap(struct vaccel *vaccel, u64 gva);
+            u64 gpa, u64 gva, u64 pgsize);
+void vaccel_iommu_page_unmap(struct vaccel *vaccel, u64 gva, u64 pgsize);
 
 void dump_paccels(struct fisor *fisor);
 
@@ -263,29 +282,22 @@ int vaccel_group_notifier(struct notifier_block *nb,
 int kthread_watch_time(void *fisor_param);
 
 #ifdef FISOR_DBG
+extern int fisor_dbg;
+extern unsigned long long tlb_opt_offset;
+
 #define fisor_err(fmt, args...) \
-    pr_err("fisor: "fmt, ##args);
+    if (fisor_dbg) {pr_err("fisor: "fmt, ##args);}
 #define fisor_info(fmt, args...) \
-    pr_info("fisor: "fmt, ##args);
+    if (fisor_dbg) {pr_info("fisor: "fmt, ##args);}
 
 #define paccel_err(paccel, fmt, args...) \
-    pr_err("paccel[%d]: "fmt, paccel->accel_id, ##args)
+    if (fisor_dbg) {pr_err("paccel[%d]: "fmt, paccel->accel_id, ##args);}
 #define paccel_info(paccel, fmt, args...) \
-    pr_info("paccel[%d]: "fmt, paccel->accel_id, ##args)
+    if (fisor_dbg) {pr_info("paccel[%d]: "fmt, paccel->accel_id, ##args);}
 
 #define vaccel_err(vaccel, fmt, args...) \
-    pr_err("vaccel[%d]: "fmt, vaccel->seq_id, ##args)
+    if (fisor_dbg) {pr_err("vaccel[%d]: "fmt, vaccel->seq_id, ##args);}
 #define vaccel_info(vaccel, fmt, args...) \
-    pr_info("vaccel[%d]: "fmt, vaccel->seq_id, ##args)
-#else
-#define fisor_err(fmt, args...)
-#define fisor_info(fmt, args...)
-
-#define paccel_err(paccel, fmt, args...)
-#define paccel_info(paccel, fmt, args...)
-
-#define vaccel_err(vaccel, fmt, args...)
-#define vaccel_info(vaccel, fmt, args...)
-#endif
+    if (fisor_dbg) {pr_info("vaccel[%d]: "fmt, vaccel->seq_id, ##args);}
 
 #endif /* _VAI_INTERNAL_H_ */
