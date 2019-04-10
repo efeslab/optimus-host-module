@@ -165,6 +165,8 @@ static int vaccel_time_slicing_submit(struct vaccel *vaccel)
 
     /* write transaction begin or continue */
     data64 = *(u64*)(vaccel->bar[VACCEL_BAR_0] + FISOR_TRANS_CTL);
+    paccel_info(paccel, "%s: write %llu to transaction control\n",
+            __func__, data64);
     writeq(data64, &mmio_base[FISOR_TRANS_CTL]);
 
     // /* cleanup the bar after transaction */
