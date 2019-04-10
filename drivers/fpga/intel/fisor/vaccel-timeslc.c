@@ -163,11 +163,30 @@ static int vaccel_time_slicing_submit(struct vaccel *vaccel)
         }
     }
 
-    /* write transaction begin */
-    writeq(FISOR_TRANS_CTL_BUSY, &mmio_base[FISOR_TRANS_CTL]);
+    /* write transaction begin or continue */
+    data64 = *(u64*)(vaccel->bar[VACCEL_BAR_0] + FISOR_TRANS_CTL);
+    paccel_info(paccel, "%s: write %llu to transaction control\n",
+            __func__, data64);
+    writeq(data64, &mmio_base[FISOR_TRANS_CTL]);
 
-    /* cleanup the bar after transaction */
-    do_vaccel_bar_cleanup(vaccel);
+    // /* cleanup the bar after transaction */
+    // do_vaccel_bar_cleanup(vaccel);
+
+    return 0;
+}
+
+static int do_paccel_pause(struct paccel *paccel) {
+    struct fisor *fisor = paccel->fisor;
+    u8 *mmio_base = fisor->pafu_mmio + paccel->mmio_start;
+    u64 data64;
+
+    /* Write pause request */
+    writeq(FISOR_TRANS_CTL_REQUEST_PAUSE, &mmio_base[FISOR_TRANS_CTL]);
+
+    do {
+        msleep(FISOR_TRANS_CTL_PAUSE_WAIT_MS);
+        data64 = readq(&mmio_base[FISOR_TRANS_CTL]);
+    } while (data64 != FISOR_TRANS_CTL_PAUSE);
 
     return 0;
 }
@@ -176,6 +195,8 @@ static inline void vaccel_record_stop(struct paccel *paccel, struct vaccel *vacc
 {
     fisor_info("kthread: De-schedule vaccel %d on paccel %d \n",
             vaccel->seq_id, paccel->accel_id);
+    fisor_info("kthread: Vaccel %d cumulative running time = %llu ms \n",
+            vaccel->seq_id, vaccel->timeslc.running_time);
     vaccel->timeslc.start_time = 0;
     vaccel->timeslc.trans_status = VACCEL_TRANSACTION_IDLE;
     STORE_LE64((u64*)&vaccel->bar[VACCEL_BAR_0][FISOR_TRANS_CTL],
@@ -203,6 +224,17 @@ static inline void vaccel_record_abort(struct paccel *paccel, struct vaccel *vac
     vaccel->timeslc.trans_status = VACCEL_TRANSACTION_IDLE;
     STORE_LE64((u64*)&vaccel->bar[VACCEL_BAR_0][FISOR_TRANS_CTL],
             FISOR_TRANS_CTL_ABORT);
+    paccel->timeslc.curr = NULL;
+}
+
+static inline void vaccel_record_pause(struct paccel *paccel, struct vaccel *vaccel)
+{
+    fisor_info("kthread: Pause vaccel %d on paccel %d \n",
+            vaccel->seq_id, paccel->accel_id);
+    vaccel->timeslc.start_time = 0;
+    vaccel->timeslc.trans_status = VACCEL_TRANSACTION_IDLE;
+    STORE_LE64((u64*)&vaccel->bar[VACCEL_BAR_0][FISOR_TRANS_CTL],
+            FISOR_TRANS_CTL_PAUSE);
     paccel->timeslc.curr = NULL;
 }
 
@@ -235,11 +267,10 @@ static void paccel_schedule_round_robin(struct paccel *paccel)
             goto next_round;
         }
 
-        /* If hw is still busy, unlock and continue */
+        /* If hw is still busy, continue (unlock in caller)*/
         if (!fisor_hw_check_idle(paccel)) {
             fisor_info("kthread: vaccel %d still runs on paccel %d \n",
                 curr->seq_id, paccel->accel_id);
-            mutex_unlock(&paccel->ops_lock);
             return;
         }
         
@@ -247,7 +278,6 @@ static void paccel_schedule_round_robin(struct paccel *paccel)
                 curr->timeslc.start_time) * 1000 / HZ;
         if (run_duration < 10) {
             /* Give hardware enough time */
-            mutex_unlock(&paccel->ops_lock);
             return;
         }
 
@@ -307,33 +337,33 @@ static void paccel_schedule_fair_abort(struct paccel *paccel)
         run_duration = (jiffies -
                 curr->timeslc.start_time) * 1000 / HZ;
 
-        /* If hw is still busy, check max running period */
-        if (!fisor_hw_check_idle(paccel)) {
-            if (run_duration <= PACCEL_TS_MAX_PERIOD_MS) {
-                fisor_info("kthread: vaccel %d still runs on paccel\
-                        %d \n", curr->seq_id, paccel->accel_id);
-                mutex_unlock(&paccel->ops_lock);
-                return;
-            }
-            else {
-                fisor_info("kthread: vaccel %d runs on paccel %d\
-                        for %llu ms, timeout \n",curr->seq_id,
-                        paccel->accel_id, run_duration);
-                curr->timeslc.running_time += run_duration;
-                vaccel_record_abort(paccel, curr);
-            }
-        }
-
         if (run_duration < 10) {
             /* Give hardware enough time */
-            mutex_unlock(&paccel->ops_lock);
             return;
         }
 
+        /* If hw is still busy, check max running period */
+        if (!fisor_hw_check_idle(paccel)) {
+            if (run_duration <= PACCEL_TS_MAX_PERIOD_MS) {
+                fisor_info("kthread: vaccel %d still runs on paccel "
+                        "%d \n", curr->seq_id, paccel->accel_id);
+                return;
+            }
+            else {
+                fisor_info("kthread: vaccel %d runs on paccel %d "
+                        "for %llu ms, timeout \n",curr->seq_id,
+                        paccel->accel_id, run_duration);
+                do_paccel_soft_reset(paccel, false);
+                vaccel_record_abort(paccel, curr);
+            }
+        }
+        else {
+            fisor_info("kthread: vaccel %d on paccel %d runs for %llu ms \n",
+                    curr->seq_id, paccel->accel_id, run_duration);
+            vaccel_record_stop(paccel, curr);
+        }
+
         curr->timeslc.running_time += run_duration;
-        fisor_info("kthread: vaccel %d on paccel %d runs for %llu ms \n",
-                curr->seq_id, paccel->accel_id, run_duration);
-        vaccel_record_stop(paccel, curr);
 
         /* maintain linked list order */
         list_del(&curr->timeslc.paccel_next);
@@ -353,10 +383,110 @@ static void paccel_schedule_fair_abort(struct paccel *paccel)
     }
 
     next_round:
-    // paccel_info(paccel, "has these vaccel: \n");
+    paccel_info(paccel, "has these vaccel: \n");
 
     list_for_each_entry_safe(vaccel, tmp_v, &paccel->timeslc.children, timeslc.paccel_next) {
-    //    paccel_info(paccel, "vaccel %d \n", vaccel->seq_id);
+        paccel_info(paccel, "vaccel %d: total running time %lld \n",
+                vaccel->seq_id, vaccel->timeslc.running_time);
+        if (vaccel->timeslc.trans_status == VACCEL_TRANSACTION_STARTED) {
+            vaccel_record_run(paccel, vaccel);
+            return;
+        }
+    }
+
+    // fisor_info("No job is runnable on paccel %d \n", paccel->accel_id);
+
+}
+
+static void paccel_schedule_fair_notify(struct paccel *paccel)
+{
+    struct vaccel *curr = NULL, *vaccel, *tmp_v;
+    u64 run_duration;
+
+    WARN_ON(paccel == NULL);
+
+    if (paccel->mode != VACCEL_TYPE_TIME_SLICING) {
+        fisor_err("%s: paccel %d is in the wrong mode\n",
+                __func__, paccel->accel_id);
+        return;
+    }
+
+    if (paccel->timeslc.policy != PACCEL_TS_POLICY_FAIR_NOTIFY) {
+        fisor_err("%s: paccel %d is in the wrong policy\n",
+                __func__, paccel->accel_id);
+        return;
+    }
+
+    if (paccel->timeslc.curr != NULL) {
+
+        curr = paccel->timeslc.curr;
+
+        if (!curr->enabled) {
+            paccel_err(paccel, "curr vaccel %d not enabled \n", curr->seq_id);
+            vaccel_record_stop(paccel, curr);
+            goto next_round;
+        }
+
+        if (curr->timeslc.trans_status != VACCEL_TRANSACTION_HARDWARE) {
+            paccel_err(paccel, "curr vaccel %d not sched \n", curr->seq_id);
+            vaccel_record_stop(paccel, curr);
+            goto next_round;
+        }
+
+        run_duration = (jiffies -
+                curr->timeslc.start_time) * 1000 / HZ;
+
+        if (run_duration < 10) {
+            /* Give hardware enough time */
+            return;
+        }
+
+        /* If hw is still busy, check max running period */
+        if (!fisor_hw_check_idle(paccel)) {
+            if (run_duration <= PACCEL_TS_MAX_PERIOD_MS) {
+                fisor_info("kthread: vaccel %d still runs on paccel "
+                        "%d \n", curr->seq_id, paccel->accel_id);
+                return;
+            }
+            else {
+                fisor_info("kthread: vaccel %d runs on paccel %d "
+                        "for %llu ms, timeout, preempt \n",
+                        curr->seq_id, paccel->accel_id, run_duration);
+                do_paccel_pause(paccel);
+                vaccel_record_pause(paccel, curr);
+            }
+        }
+        else {
+            fisor_info("kthread: vaccel %d on paccel %d runs for %llu ms \n",
+                    curr->seq_id, paccel->accel_id, run_duration);
+            vaccel_record_stop(paccel, curr);
+        }
+
+        curr->timeslc.running_time += run_duration;
+
+        /* maintain linked list order */
+        list_del(&curr->timeslc.paccel_next);
+        list_for_each_entry(vaccel, &paccel->timeslc.children, timeslc.paccel_next) {
+            if (vaccel->timeslc.running_time >
+                    curr->timeslc.running_time)
+                break;
+        }
+        if (&vaccel->timeslc.paccel_next == &paccel->timeslc.children) {
+            list_add_tail(&curr->timeslc.paccel_next,
+                    &paccel->timeslc.children);
+        }
+        else {
+            list_add(&curr->timeslc.paccel_next,
+                    vaccel->timeslc.paccel_next.prev);
+        }
+    }
+
+    next_round:
+    paccel_info(paccel, "has these vaccel: \n");
+
+    list_for_each_entry_safe(vaccel, tmp_v, &paccel->timeslc.children, timeslc.paccel_next) {
+        paccel_info(paccel, "vaccel %d: total running time %lld \n", 
+                vaccel->seq_id, vaccel->timeslc.running_time);
         if (vaccel->timeslc.trans_status == VACCEL_TRANSACTION_STARTED) {
             vaccel_record_run(paccel, vaccel);
             return;
@@ -387,6 +517,8 @@ int kthread_watch_time(void *fisor_param)
 
         fisor->user_check_signal = 0;
 
+        mutex_lock(&fisor->ops_lock);
+
         for (i = 0; i < npaccels; i++) {
 
             paccel = &paccels[i];
@@ -403,12 +535,19 @@ int kthread_watch_time(void *fisor_param)
                 paccel_schedule_fair_abort(paccel);
                 break;
             }
+            case PACCEL_TS_POLICY_FAIR_NOTIFY:
+            {
+                paccel_schedule_fair_notify(paccel);
+                break;
+            }
             default:
                 paccel_schedule_round_robin(paccel);
             }
 
             mutex_unlock(&paccel->ops_lock);
         }
+
+        mutex_unlock(&fisor->ops_lock);
 
         set_current_state(TASK_INTERRUPTIBLE);
 
@@ -452,13 +591,19 @@ static int vaccel_time_slicing_handle_mmio_read(struct vaccel *vaccel,
             vaccel_err(vaccel, "offset too large");
             return -EINVAL;
         }
-        
-        LOAD_LE64(&vaccel->bar[VACCEL_BAR_0][offset], *val);
 
         if (offset == 0x18) {
             vaccel_info(vaccel, "Check hw transaction state \n");
             fisor->user_check_signal = 1;
             wake_up_process(fisor->scheduler);
+            LOAD_LE64(&vaccel->bar[VACCEL_BAR_0][offset], *val);
+        }
+        else if (offset == FISOR_STATE_SZ) {
+            vaccel_info(vaccel, "Read the saved state size (in # of pages) \n");
+            *val = paccel->timeslc.state_sz;
+        }
+        else {
+            LOAD_LE64(&vaccel->bar[VACCEL_BAR_0][offset], *val);
         }
     } else {
         switch (offset) {

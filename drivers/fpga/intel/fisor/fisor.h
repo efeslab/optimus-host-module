@@ -122,6 +122,12 @@ struct fisor {
 #define FISOR_TRANS_CTL_FINISH 2
 #define FISOR_TRANS_CTL_ABORT 3
 #define FISOR_TRANS_CTL_PAUSE 4
+#define FISOR_TRANS_CTL_CONT 5
+#define FISOR_TRANS_CTL_REQUEST_PAUSE 6
+
+#define FISOR_TRANS_CTL_PAUSE_WAIT_MS 100
+
+#define FISOR_STATE_SZ 0x20
 
 enum {
     VACCEL_BAR_0,
@@ -162,7 +168,7 @@ typedef enum {
     PACCEL_TS_POLICY_FAIR_NOTIFY
 } paccel_ts_sched_policy_t;
 
-#define PACCEL_TS_MAX_PERIOD_MS 20000
+#define PACCEL_TS_MAX_PERIOD_MS 8000
 
 struct paccel {
     struct fisor *fisor;
@@ -186,6 +192,7 @@ struct paccel {
             paccel_ts_sched_policy_t policy;
             struct list_head children;
             struct vaccel *curr;
+            u64 state_sz;
         } timeslc;
     };
 
@@ -280,6 +287,8 @@ int vaccel_group_notifier(struct notifier_block *nb,
             long unsigned int action, void *data);
 
 int kthread_watch_time(void *fisor_param);
+
+#define FISOR_DBG
 
 #ifdef FISOR_DBG
 extern int fisor_dbg;

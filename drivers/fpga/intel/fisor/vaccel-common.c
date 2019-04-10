@@ -54,6 +54,7 @@ int vaccel_iommu_page_map(struct vaccel *vaccel,
     }
 
     pfn = gfn_to_pfn(kvm, gfn);
+    // fisor_info("%s: iommu map gva %llx to gpa %llx\n", __func__, gva, gpa);
 
     /* add to IOMMU */
     if (!IS_ALIGNED((unsigned long)(gva), pgsize)) {
@@ -79,7 +80,7 @@ int vaccel_iommu_page_map(struct vaccel *vaccel,
         vaccel_info(vaccel, "%s: clear already mapped\n", __func__);
     }
 
-    vaccel_info(vaccel, "iommu_map %llx ==> %llx ==> %llx\n", gva, gpa, pfn << PAGE_SHIFT);
+    // vaccel_info(vaccel, "iommu_map %llx ==> %llx ==> %llx\n", gva, gpa, pfn << PAGE_SHIFT);
 
     return iommu_map(vaccel->fisor->domain, gva,
                         pfn << PAGE_SHIFT, pgsize, flags);
