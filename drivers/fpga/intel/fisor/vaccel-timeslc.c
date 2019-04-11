@@ -600,20 +600,17 @@ static int vaccel_time_slicing_handle_mmio_read(struct vaccel *vaccel,
             return 0;
         }
 
-        // Read from hardware
-        if (paccel->timeslc.curr == vaccel &&
-                vaccel->timeslc.trans_status == VACCEL_TRANSACTION_HARDWARE) {
-            offset = offset + paccel->mmio_start;
-            data64 = readq(&fisor->pafu_mmio[offset]);
-            *val = data64;
-            return 0;
-        }
-
-        if (offset == 0x18) {
+        if (offset == FISOR_TRANS_CTL) {
             vaccel_info(vaccel, "Check hw transaction state \n");
             fisor->user_check_signal = 1;
             wake_up_process(fisor->scheduler);
             LOAD_LE64(&vaccel->bar[VACCEL_BAR_0][offset], *val);
+        }
+        else if (paccel->timeslc.curr == vaccel &&
+                vaccel->timeslc.trans_status == VACCEL_TRANSACTION_HARDWARE) {
+            offset = offset + paccel->mmio_start;
+            data64 = readq(&fisor->pafu_mmio[offset]);
+            *val = data64;
         }
         else {
             LOAD_LE64(&vaccel->bar[VACCEL_BAR_0][offset], *val);
