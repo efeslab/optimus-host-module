@@ -575,6 +575,7 @@ static int vaccel_time_slicing_handle_mmio_read(struct vaccel *vaccel,
 {
     struct fisor *fisor = vaccel->fisor;
     struct paccel *paccel = vaccel->paccel;
+    u64 data64;
 
     if (vaccel->mode != VACCEL_TYPE_TIME_SLICING) {
         vaccel_err(vaccel, "wrong mode");
@@ -592,15 +593,27 @@ static int vaccel_time_slicing_handle_mmio_read(struct vaccel *vaccel,
             return -EINVAL;
         }
 
+        if (offset == FISOR_STATE_SZ &&
+                paccel->timeslc.policy == PACCEL_TS_POLICY_FAIR_NOTIFY) {
+            vaccel_info(vaccel, "Read the saved state size (in # of pages) \n");
+            *val = paccel->timeslc.state_sz;
+            return 0;
+        }
+
+        // Read from hardware
+        if (paccel->timeslc.curr == vaccel &&
+                vaccel->timeslc.trans_status == VACCEL_TRANSACTION_HARDWARE) {
+            offset = offset + paccel->mmio_start;
+            data64 = readq(&fisor->pafu_mmio[offset]);
+            *val = data64;
+            return 0;
+        }
+
         if (offset == 0x18) {
             vaccel_info(vaccel, "Check hw transaction state \n");
             fisor->user_check_signal = 1;
             wake_up_process(fisor->scheduler);
             LOAD_LE64(&vaccel->bar[VACCEL_BAR_0][offset], *val);
-        }
-        else if (offset == FISOR_STATE_SZ) {
-            vaccel_info(vaccel, "Read the saved state size (in # of pages) \n");
-            *val = paccel->timeslc.state_sz;
         }
         else {
             LOAD_LE64(&vaccel->bar[VACCEL_BAR_0][offset], *val);
