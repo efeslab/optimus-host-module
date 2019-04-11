@@ -215,6 +215,17 @@ static int vaccel_direct_close(struct mdev_device *mdev)
     return 0;
 }
 
+static int vaccel_direct_set_mux_offset(struct vaccel *vaccel)
+{
+    struct fisor *fisor = vaccel->fisor;
+    u64 mux_offset = vaccel->iova_start/CL(1) - vaccel->gva_start/CL(1);
+    u64 vm_cfg_offset = paccel->accel_id * 8 + 0x30;
+
+    writeq(mux_offset, &fisor->pafu_mmio[vm_cfg_offset]);
+
+    return 0;
+}
+
 static int vaccel_direct_soft_reset(struct vaccel *vaccel)
 {
     /* to soft reset we write a special register */
@@ -232,6 +243,7 @@ struct vaccel_ops vaccel_direct_ops = {
     .open = vaccel_direct_open,
     .close = vaccel_direct_close,
     .soft_reset = vaccel_direct_soft_reset,
+    .set_mux_offset = vaccel_direct_set_mux_offset,
     .handle_mmio_read = vaccel_direct_handle_mmio_read,
     .handle_mmio_write = vaccel_direct_handle_mmio_write,
 };

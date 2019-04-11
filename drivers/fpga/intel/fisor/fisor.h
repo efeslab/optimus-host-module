@@ -152,6 +152,7 @@ struct vaccel_ops {
     int (*handle_mmio_read)(struct vaccel *vaccel, u32 index, u32 offset, u64 *val);
     int (*handle_mmio_write)(struct vaccel *vaccel, u32 index, u32 offset, u64 val);
     int (*soft_reset)(struct vaccel *vaccel);
+    int (*set_mux_offset)(struct vaccel *vaccel);
 };
 
 extern struct mutex fisor_list_lock;

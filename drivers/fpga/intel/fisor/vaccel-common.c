@@ -322,11 +322,7 @@ int vaccel_handle_bar2_write(struct vaccel *vaccel, u32 offset, u64 val)
         /* set gva start */
         vaccel->gva_start = val;
 
-        /* calculate the offset for hardware fix */
-        mux_offset = vaccel->iova_start/CL(1) -
-                vaccel->gva_start/CL(1);
-        vm_cfg_offset = paccel->accel_id * 8 + 0x30;
-        writeq(mux_offset, &fisor->pafu_mmio[vm_cfg_offset]);
+        vaccel->ops->set_mux_offset(vaccel);
 
         break;
     }
