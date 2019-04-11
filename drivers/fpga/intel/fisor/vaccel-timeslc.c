@@ -179,6 +179,7 @@ static int do_paccel_pause(struct paccel *paccel) {
     struct fisor *fisor = paccel->fisor;
     u8 *mmio_base = fisor->pafu_mmio + paccel->mmio_start;
     u64 data64;
+    int i = 0;
 
     /* Write pause request */
     writeq(FISOR_TRANS_CTL_REQUEST_PAUSE, &mmio_base[FISOR_TRANS_CTL]);
@@ -186,7 +187,13 @@ static int do_paccel_pause(struct paccel *paccel) {
     do {
         msleep(FISOR_TRANS_CTL_PAUSE_WAIT_MS);
         data64 = readq(&mmio_base[FISOR_TRANS_CTL]);
-    } while (data64 != FISOR_TRANS_CTL_PAUSE);
+        i++;
+    } while (data64 != FISOR_TRANS_CTL_PAUSE && i < 10);
+
+    if (i == 10) {
+        paccel_err(paccel, "Pause failed: no response (CTL: %llu)\n", data64);
+        return -EIO;
+    }
 
     return 0;
 }
@@ -605,6 +612,7 @@ static int vaccel_time_slicing_handle_mmio_read(struct vaccel *vaccel,
             fisor->user_check_signal = 1;
             wake_up_process(fisor->scheduler);
             LOAD_LE64(&vaccel->bar[VACCEL_BAR_0][offset], *val);
+            vaccel_info(vaccel, "buffer: %llu\n", *val);
         }
         else if (paccel->timeslc.curr == vaccel &&
                 vaccel->timeslc.trans_status == VACCEL_TRANSACTION_HARDWARE) {
@@ -661,6 +669,7 @@ static int vaccel_time_slicing_handle_mmio_write(struct vaccel *vaccel,
             }
             vaccel->timeslc.trans_status = VACCEL_TRANSACTION_STARTED;
             vaccel_info(vaccel, "Commit transaction, wakeup scheduler\n");
+            vaccel_info(vaccel, "buffer: %llu\n", val);
             fisor->user_check_signal = 1;
             wake_up_process(fisor->scheduler);
         }
