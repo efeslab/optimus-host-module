@@ -353,8 +353,8 @@ static void paccel_schedule_fair_abort(struct paccel *paccel)
                 fisor_info("kthread: vaccel %d runs on paccel %d "
                         "for %llu ms, timeout \n",curr->seq_id,
                         paccel->accel_id, run_duration);
-                do_paccel_soft_reset(paccel, false);
                 vaccel_record_abort(paccel, curr);
+                do_paccel_soft_reset(paccel, false);
             }
         }
         else {
@@ -452,8 +452,8 @@ static void paccel_schedule_fair_notify(struct paccel *paccel)
                 fisor_info("kthread: vaccel %d runs on paccel %d "
                         "for %llu ms, timeout, preempt \n",
                         curr->seq_id, paccel->accel_id, run_duration);
-                do_paccel_pause(paccel);
                 vaccel_record_pause(paccel, curr);
+                do_paccel_pause(paccel);
             }
         }
         else {
