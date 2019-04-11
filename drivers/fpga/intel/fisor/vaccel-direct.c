@@ -217,6 +217,7 @@ static int vaccel_direct_close(struct mdev_device *mdev)
 
 static int vaccel_direct_set_mux_offset(struct vaccel *vaccel)
 {
+    struct paccel *paccel = vaccel->paccel;
     struct fisor *fisor = vaccel->fisor;
     u64 mux_offset = vaccel->iova_start/CL(1) - vaccel->gva_start/CL(1);
     u64 vm_cfg_offset = paccel->accel_id * 8 + 0x30;

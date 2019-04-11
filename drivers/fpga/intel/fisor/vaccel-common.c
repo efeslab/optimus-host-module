@@ -201,9 +201,6 @@ int vaccel_write_gpa(struct vaccel *vaccel, u64 gpa, void *buf, u64 len)
 
 int vaccel_handle_bar2_write(struct vaccel *vaccel, u32 offset, u64 val)
 {
-    struct fisor *fisor = vaccel->fisor;
-    struct paccel *paccel = vaccel->paccel;
-
     STORE_LE64(&vaccel->bar[VACCEL_BAR_2][offset], val);
 
     switch (offset) {
@@ -316,9 +313,6 @@ int vaccel_handle_bar2_write(struct vaccel *vaccel, u32 offset, u64 val)
     }
     case 0x10: /* MEM_BASE */
     {
-        u64 mux_offset;
-        u64 vm_cfg_offset;
-
         /* set gva start */
         vaccel->gva_start = val;
 
