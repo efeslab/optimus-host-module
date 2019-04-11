@@ -759,6 +759,11 @@ static int vaccel_time_slicing_soft_reset(struct vaccel *vaccel)
     return 0;
 }
 
+static int vaccel_time_slicing_set_mux_offset(struct vaccel* vaccel)
+{
+    return 0;
+}
+
 struct paccel_ops paccel_time_slicing_ops = {
     .vaccel_init = vaccel_time_slicing_init,
     .vaccel_uinit = vaccel_time_slicing_uinit,
@@ -769,6 +774,7 @@ struct vaccel_ops vaccel_time_slicing_ops = {
     .open = vaccel_time_slicing_open,
     .close = vaccel_time_slicing_close,
     .soft_reset = vaccel_time_slicing_soft_reset,
+    .set_mux_offset = vaccel_time_slicing_set_mux_offset,
     .handle_mmio_read = vaccel_time_slicing_handle_mmio_read,
     .handle_mmio_write = vaccel_time_slicing_handle_mmio_write,
 };
