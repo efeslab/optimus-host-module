@@ -35,8 +35,8 @@ int vaccel_iommu_page_map(struct vaccel *vaccel,
     int flags = vaccel->fisor->iommu_map_flags;
     u64 host_pgsize = vaccel_kvm_host_page_size(kvm, gfn);
 
-    fisor_info("%s: iommu map gva %llx to gpa %llx pgsize %llx\n",
-                    __func__, gva, gpa, pgsize);
+    // fisor_info("%s: iommu map gva %llx to gpa %llx pgsize %llx\n",
+    //                __func__, gva, gpa, pgsize);
 
     if (host_pgsize < pgsize) {
         u64 off, ret;
@@ -77,7 +77,7 @@ int vaccel_iommu_page_map(struct vaccel *vaccel,
     if (old_pfn) {
         iommu_unmap(domain, gva, pgsize);
         kvm_release_pfn_clean(old_pfn);
-        vaccel_info(vaccel, "%s: clear already mapped\n", __func__);
+        // vaccel_info(vaccel, "%s: clear already mapped\n", __func__);
     }
 
     // vaccel_info(vaccel, "iommu_map %llx ==> %llx ==> %llx\n", gva, gpa, pfn << PAGE_SHIFT);

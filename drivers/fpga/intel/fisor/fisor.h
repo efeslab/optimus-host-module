@@ -309,4 +309,6 @@ extern unsigned long long tlb_opt_offset;
 #define vaccel_info(vaccel, fmt, args...) \
     if (fisor_dbg) {pr_info("vaccel[%d]: "fmt, vaccel->seq_id, ##args);}
 
+#endif
+
 #endif /* _VAI_INTERNAL_H_ */
