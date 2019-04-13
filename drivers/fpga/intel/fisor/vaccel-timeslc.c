@@ -179,18 +179,19 @@ static int do_paccel_pause(struct paccel *paccel) {
     struct fisor *fisor = paccel->fisor;
     u8 *mmio_base = fisor->pafu_mmio + paccel->mmio_start;
     u64 data64;
-    int i = 0;
+    u64 start;
 
     /* Write pause request */
     writeq(FISOR_TRANS_CTL_REQUEST_PAUSE, &mmio_base[FISOR_TRANS_CTL]);
 
-    do {
-        msleep(FISOR_TRANS_CTL_PAUSE_WAIT_MS);
-        data64 = readq(&mmio_base[FISOR_TRANS_CTL]);
-        i++;
-    } while (data64 != FISOR_TRANS_CTL_PAUSE && i < 10);
+    start = jiffies;
 
-    if (i == 10) {
+    do {
+        data64 = readq(&mmio_base[FISOR_TRANS_CTL]);
+    } while (data64 != FISOR_TRANS_CTL_PAUSE &&
+            jiffies < start + 50 * HZ / 1000);
+
+    if (data64 != FISOR_TRANS_CTL_PAUSE) {
         paccel_err(paccel, "Pause failed: no response (CTL: %llu)\n", data64);
         return -EIO;
     }
@@ -202,8 +203,6 @@ static inline void vaccel_record_stop(struct paccel *paccel, struct vaccel *vacc
 {
     fisor_info("kthread: De-schedule vaccel %d on paccel %d \n",
             vaccel->seq_id, paccel->accel_id);
-    fisor_info("kthread: Vaccel %d cumulative running time = %llu ms \n",
-            vaccel->seq_id, vaccel->timeslc.running_time);
     vaccel->timeslc.start_time = 0;
     vaccel->timeslc.trans_status = VACCEL_TRANSACTION_IDLE;
     STORE_LE64((u64*)&vaccel->bar[VACCEL_BAR_0][FISOR_TRANS_CTL],
@@ -353,7 +352,8 @@ static void paccel_schedule_fair_abort(struct paccel *paccel)
         if (!fisor_hw_check_idle(paccel)) {
             if (run_duration <= PACCEL_TS_MAX_PERIOD_MS) {
                 fisor_info("kthread: vaccel %d still runs on paccel "
-                        "%d \n", curr->seq_id, paccel->accel_id);
+                        "%d, lasts %llu ms \n", curr->seq_id,
+                        paccel->accel_id, run_duration);
                 return;
             }
             else {
