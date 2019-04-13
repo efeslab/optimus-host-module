@@ -238,9 +238,7 @@ static inline void vaccel_record_pause(struct paccel *paccel, struct vaccel *vac
     fisor_info("kthread: Pause vaccel %d on paccel %d \n",
             vaccel->seq_id, paccel->accel_id);
     vaccel->timeslc.start_time = 0;
-    vaccel->timeslc.trans_status = VACCEL_TRANSACTION_IDLE;
-    STORE_LE64((u64*)&vaccel->bar[VACCEL_BAR_0][FISOR_TRANS_CTL],
-            FISOR_TRANS_CTL_PAUSE);
+    vaccel->timeslc.trans_status = VACCEL_TRANSACTION_STARTED;
     paccel->timeslc.curr = NULL;
 }
 
