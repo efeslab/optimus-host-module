@@ -169,6 +169,8 @@ typedef enum {
     PACCEL_TS_POLICY_FAIR_NOTIFY
 } paccel_ts_sched_policy_t;
 
+#define SCHED_ENABLE_WRIGHT
+
 #define PACCEL_TS_MAX_PERIOD_MS 800
 
 struct paccel {
@@ -238,6 +240,7 @@ struct vaccel {
             vaccel_trans_stat_t trans_status;
             u64 start_time;
             u64 running_time;
+            u32 weight;
         } timeslc;
     };
 

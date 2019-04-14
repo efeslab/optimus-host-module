@@ -50,6 +50,12 @@ static int vaccel_time_slicing_init(struct vaccel *vaccel,
     vaccel->timeslc.trans_status = VACCEL_TRANSACTION_IDLE;
     vaccel->timeslc.start_time = 0;
     vaccel->timeslc.running_time = 0;
+    #ifdef SCHED_ENABLE_WRIGHT
+    vaccel->timeslc.weight = 1;
+    if (vaccel->seq_id == 0) {
+        vaccel->timeslc.weight = 2;
+    }
+    #endif
     mutex_init(&vaccel->ops_lock);
 
     /* create pcie config space */
@@ -474,9 +480,15 @@ static void paccel_schedule_fair_notify(struct paccel *paccel)
         /* maintain linked list order */
         list_del(&curr->timeslc.paccel_next);
         list_for_each_entry(vaccel, &paccel->timeslc.children, timeslc.paccel_next) {
+            #ifdef SCHED_ENABLE_WRIGHT
+            if (vaccel->timeslc.running_time * curr->timeslc.weight >
+                    curr->timeslc.running_time * vaccel->timeslc.weight)
+                break;
+            #else
             if (vaccel->timeslc.running_time >
                     curr->timeslc.running_time)
                 break;
+            #endif
         }
         if (&vaccel->timeslc.paccel_next == &paccel->timeslc.children) {
             list_add_tail(&curr->timeslc.paccel_next,
