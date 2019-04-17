@@ -50,7 +50,7 @@ static int vaccel_time_slicing_init(struct vaccel *vaccel,
     vaccel->timeslc.trans_status = VACCEL_TRANSACTION_IDLE;
     vaccel->timeslc.start_time = 0;
     vaccel->timeslc.running_time = 0;
-    #ifdef SCHED_ENABLE_WRIGHT
+    #ifdef SCHED_ENABLE_WEIGHT
     vaccel->timeslc.weight = 1;
     if (vaccel->seq_id == 0) {
         vaccel->timeslc.weight = 2;
@@ -250,6 +250,37 @@ static inline void vaccel_record_pause(struct paccel *paccel, struct vaccel *vac
     paccel->timeslc.curr = NULL;
 }
 
+static inline bool vaccel_should_continue(struct paccel *paccel, struct vaccel *curr, u64 duration)
+{
+    struct vaccel *next;
+
+    if (duration <= PACCEL_TS_MAX_PERIOD_MS)
+        return true;
+
+    list_for_each_entry(next, &paccel->timeslc.children, timeslc.paccel_next) {
+        if (next == curr)
+            continue;
+
+        if (next->timeslc.trans_status != VACCEL_TRANSACTION_STARTED)
+            continue;
+
+        #ifdef SCHED_ENABLE_WEIGHT
+        if (next->timeslc.running_time * curr->timeslc.weight <
+                (curr->timeslc.running_time + duration) * next->timeslc.weight)
+        #else
+        if (next->timeslc.running_time <
+                curr->timeslc.running_time + duration)
+        #endif
+        {
+            return false;
+        }
+        else {
+            break;
+        }
+    }
+    return true;
+}
+
 static void paccel_schedule_round_robin(struct paccel *paccel)
 {
     struct vaccel *curr = NULL, *vaccel, *tmp_v;
@@ -288,10 +319,6 @@ static void paccel_schedule_round_robin(struct paccel *paccel)
         
         run_duration = (jiffies -
                 curr->timeslc.start_time) * 1000 / HZ;
-        if (run_duration < 10) {
-            /* Give hardware enough time */
-            return;
-        }
 
         curr->timeslc.running_time += run_duration;
         fisor_info("kthread: vaccel %d on paccel %d runs for %llu ms \n",
@@ -348,11 +375,6 @@ static void paccel_schedule_fair_abort(struct paccel *paccel)
 
         run_duration = (jiffies -
                 curr->timeslc.start_time) * 1000 / HZ;
-
-        if (run_duration < 10) {
-            /* Give hardware enough time */
-            return;
-        }
 
         /* If hw is still busy, check max running period */
         if (!fisor_hw_check_idle(paccel)) {
@@ -449,19 +471,16 @@ static void paccel_schedule_fair_notify(struct paccel *paccel)
         run_duration = (jiffies -
                 curr->timeslc.start_time) * 1000 / HZ;
 
-        if (run_duration < 10) {
-            /* Give hardware enough time */
-            return;
-        }
-
         /* If hw is still busy, check max running period */
         if (!fisor_hw_check_idle(paccel)) {
-            if (run_duration <= PACCEL_TS_MAX_PERIOD_MS) {
+            if (vaccel_should_continue(paccel, curr, run_duration))
+            {
                 fisor_info("kthread: vaccel %d still runs on paccel "
                         "%d \n", curr->seq_id, paccel->accel_id);
                 return;
             }
-            else {
+            else
+            {
                 fisor_info("kthread: vaccel %d runs on paccel %d "
                         "for %llu ms, timeout, preempt \n",
                         curr->seq_id, paccel->accel_id, run_duration);
@@ -480,7 +499,7 @@ static void paccel_schedule_fair_notify(struct paccel *paccel)
         /* maintain linked list order */
         list_del(&curr->timeslc.paccel_next);
         list_for_each_entry(vaccel, &paccel->timeslc.children, timeslc.paccel_next) {
-            #ifdef SCHED_ENABLE_WRIGHT
+            #ifdef SCHED_ENABLE_WEIGHT
             if (vaccel->timeslc.running_time * curr->timeslc.weight >
                     curr->timeslc.running_time * vaccel->timeslc.weight)
                 break;
@@ -581,7 +600,7 @@ int kthread_watch_time(void *fisor_param)
         }
 
         // fisor_info("Scheduling kthread sleeps \n");
-        schedule_timeout(10 * HZ);
+        schedule_timeout(100000 * HZ);
     }
 
     fisor_info("Time keeping (scheduling) kthread exits \n");

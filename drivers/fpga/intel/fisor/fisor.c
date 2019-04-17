@@ -919,7 +919,7 @@ static int fisor_probe(struct fisor *fisor, u32 *ndirect, u32 *nts)
             fisor->paccels[i].ops = &paccel_direct_ops;
         }
         else {
-            fisor->paccels[i].timeslc.total = 4;
+            fisor->paccels[i].timeslc.total = 16;
             fisor->paccels[i].timeslc.occupied = 0;
             fisor->paccels[i].timeslc.policy =
                     PACCEL_TS_POLICY_FAIR_NOTIFY;

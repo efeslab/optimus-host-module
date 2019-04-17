@@ -169,9 +169,9 @@ typedef enum {
     PACCEL_TS_POLICY_FAIR_NOTIFY
 } paccel_ts_sched_policy_t;
 
-#define SCHED_ENABLE_WRIGHT
+#define SCHED_ENABLE_WEIGHT
 
-#define PACCEL_TS_MAX_PERIOD_MS 800
+#define PACCEL_TS_MAX_PERIOD_MS 10
 
 struct paccel {
     struct fisor *fisor;
