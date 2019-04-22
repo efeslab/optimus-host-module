@@ -53,6 +53,9 @@ static int vaccel_time_slicing_init(struct vaccel *vaccel,
     #ifdef SCHED_ENABLE_WEIGHT
     vaccel->timeslc.weight = 1;
     if (vaccel->seq_id == 0) {
+        vaccel->timeslc.weight = 4;
+    }
+    if (vaccel->seq_id == 1) {
         vaccel->timeslc.weight = 2;
     }
     #endif
@@ -187,6 +190,10 @@ static int do_paccel_pause(struct paccel *paccel) {
     u64 data64;
     u64 start;
 
+    u64 clock1, clock2;
+
+    clock1 =rdtsc_ordered();
+
     /* Write pause request */
     writeq(FISOR_TRANS_CTL_REQUEST_PAUSE, &mmio_base[FISOR_TRANS_CTL]);
 
@@ -197,10 +204,18 @@ static int do_paccel_pause(struct paccel *paccel) {
     } while (data64 != FISOR_TRANS_CTL_PAUSE &&
             jiffies < start + 50 * HZ / 1000);
 
+    //clock2 = rdtsc_ordered();
+
+    //printk("Clock difference %llu\n", clock2 - clock1);
+
     if (data64 != FISOR_TRANS_CTL_PAUSE) {
         paccel_err(paccel, "Pause failed: no response (CTL: %llu)\n", data64);
         return -EIO;
     }
+
+    do {
+        clock2 = rdtsc_ordered();
+    } while (clock2 - clock1 < PACCEL_PREEMPT_WAIT_CYCLE);
 
     return 0;
 }
