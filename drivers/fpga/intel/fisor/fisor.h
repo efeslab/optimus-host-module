@@ -81,6 +81,13 @@
 #define FISOR_VFIO_PCI_OFFSET_MASK    \
 				(((u64)(1) << FISOR_VFIO_PCI_OFFSET_SHIFT) - 1)
 
+#define SCHED_ENABLE_WEIGHT
+
+#ifdef SCHED_ENABLE_WEIGHT
+#define SCHED_WEIGHT_BIT 4
+#define SCHED_WEIGHT_MASK 0xf
+#endif
+
 struct paccel;
 struct vaccel;
 
@@ -91,6 +98,10 @@ struct fisor {
 
     struct mutex ops_lock;
     struct list_head vaccel_list;
+
+    #ifdef SCHED_ENABLE_WEIGHT
+    u64 weights;
+    #endif
 
     struct iommu_domain *domain;
     int iommu_map_flags;
@@ -168,8 +179,6 @@ typedef enum {
     PACCEL_TS_POLICY_FAIR_ABORT,
     PACCEL_TS_POLICY_FAIR_NOTIFY
 } paccel_ts_sched_policy_t;
-
-//#define SCHED_ENABLE_WEIGHT
 
 #define PACCEL_TS_MAX_PERIOD_MS 1
 #define PACCEL_PREEMPT_WAIT_CYCLE 326728

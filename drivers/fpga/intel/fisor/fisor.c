@@ -692,8 +692,85 @@ info_show(struct device *dev,
 }
 static DEVICE_ATTR_RO(info);
 
+static ssize_t
+weights_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+    #ifdef SCHED_ENABLE_WEIGHT
+
+    struct fisor *fisor = device_to_fisor(dev);
+
+    return sprintf(buf, "%016x\n", fisor->weights);
+
+    #else
+	return sprintf(buf, "0\n");
+    #endif
+}
+
+static ssize_t
+weights_store(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+    #ifdef SCHED_ENABLE_WEIGHT
+
+    struct fisor *fisor = device_to_fisor(dev);
+    int err;
+    u64 data;
+    struct vaccel *vacc, *vacc2;
+    struct paccel *pacc;
+
+    err = kstrtou64(buf, 0, &data);
+    if (err)
+        return err;
+
+    fisor->weights = data;
+
+    mutex_lock(&fisor->ops_lock);
+
+    list_for_each_entry(vacc, &fisor->next, next) {
+        if (vacc->seq_id >= 64/SCHED_WEIGHT_BIT)
+            break;
+        if (vacc->mode != VACCEL_TYPE_TIME_SLICING)
+            continue;
+        if (data & SCHED_WEIGHT_MASK == 0)
+            continue;
+        pacc = vacc->paccel;
+        if (pacc->timeslc.policy != PACCEL_TS_POLICY_FAIR_NOTIFY)
+            continue;
+        vacc->timeslc.weight = data & SCHED_WEIGHT_MASK;
+        data = data >> SCHED_WEIGHT_BIT;
+        mutex_lock(&paccel->ops_lock);
+
+        list_del(&vacc->timeslc.paccel_next);
+        list_for_each_entry(vacc2, &pacc->timeslc.children, timeslc.paccel_next) {
+            if (vacc2->timeslc.running_time * vacc->timeslc.weight >
+                    vacc->timeslc.running_time * vacc2->timeslc.weight)
+                break;
+        }
+        if (&vacc->timeslc.paccel_next == &pacc->timeslc.children) {
+            list_add_tail(&vacc->timeslc.paccel_next,
+                    &pacc->timeslc.children);
+        }
+        else {
+            list_add(&vacc->timeslc.paccel_next,
+                    vacc2->timeslc.paccel_next.prev);
+        }
+
+        mutex_unlock(&paccel->ops_lock);
+    }
+
+    mutex_unlock(&fisor->ops_lock);
+
+    #endif
+
+    return count;
+}
+
+static DEVICE_ATTR_RW(weights);
+
 static struct attribute *fisor_attrs[] = {
     &dev_attr_info.attr,
+    &dev_attr_weights.attr,
     NULL,
 };
 
@@ -1027,6 +1104,9 @@ int fpga_register_afu_mdev_device(struct platform_device *pdev)
     mutex_init(&fisor->ops_lock);
     INIT_LIST_HEAD(&fisor->vaccel_list);
     atomic_set(&fisor->next_seq_id, 0);
+    #ifdef SCHED_ENABLE_WEIGHT
+    fisor->weights = 0;
+    #endif
     
     fisor_probe(fisor, &ndirect, &nts);
     fisor_iommu_init(fisor, pdev);
