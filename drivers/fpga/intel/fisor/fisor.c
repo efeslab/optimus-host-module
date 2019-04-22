@@ -700,7 +700,7 @@ weights_show(struct device *dev,
 
     struct fisor *fisor = device_to_fisor(dev);
 
-    return sprintf(buf, "%016x\n", fisor->weights);
+    return sprintf(buf, "%016llx\n", fisor->weights);
 
     #else
 	return sprintf(buf, "0\n");
@@ -732,14 +732,14 @@ weights_store(struct device *dev,
             break;
         if (vacc->mode != VACCEL_TYPE_TIME_SLICING)
             continue;
-        if (data & SCHED_WEIGHT_MASK == 0)
+        if ((data & SCHED_WEIGHT_MASK) == 0)
             continue;
         pacc = vacc->paccel;
         if (pacc->timeslc.policy != PACCEL_TS_POLICY_FAIR_NOTIFY)
             continue;
         vacc->timeslc.weight = data & SCHED_WEIGHT_MASK;
         data = data >> SCHED_WEIGHT_BIT;
-        mutex_lock(&paccel->ops_lock);
+        mutex_lock(&pacc->ops_lock);
 
         list_del(&vacc->timeslc.paccel_next);
         list_for_each_entry(vacc2, &pacc->timeslc.children, timeslc.paccel_next) {
@@ -756,7 +756,7 @@ weights_store(struct device *dev,
                     vacc2->timeslc.paccel_next.prev);
         }
 
-        mutex_unlock(&paccel->ops_lock);
+        mutex_unlock(&pacc->ops_lock);
     }
 
     mutex_unlock(&fisor->ops_lock);
