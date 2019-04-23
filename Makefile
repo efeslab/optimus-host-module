@@ -4,13 +4,13 @@ PWD ?= $(pwd)
 cflags-y +=  -Wno-unused-value -Wno-unused-label -I$(PWD)/include -I$(PWD)/include/uapi -I$(PWD)/include/intel
 cflags-y += -I$(DESTDIR)/usr/src/intel-fpga-1.2.0-1/include -I$(DESTDIR)/usr/src/intel-fpga-1.2.0-1/include/uapi -I$(DESTDIR)/usr/src/intel-fpga-1.2.0-1/include/intel
 cflags-y += -I$(PWD)/build/include -I$(PWD)/build/include/uapi -I$(PWD)/build/include/intel
-cflags-y += -DDEBUG
+#cflags-y += -DDEBUG
 
 ccflags-y +=  -Wno-unused-value -Wno-unused-label -I$(PWD)/include -I$(PWD)/include/uapi -I$(PWD)/include/intel
 ccflags-y += -I$(DESTDIR)/usr/src/intel-fpga-1.2.0-1/include -I$(DESTDIR)/usr/src/intel-fpga-1.2.0-1/include/uapi -I$(DESTDIR)/usr/src/intel-fpga-1.2.0-1/include/intel
 ccflags-y += -I$(PWD)/build/include -I$(PWD)/build/include/uapi -I$(PWD)/build/include/intel
 ccflags-y += -DCONFIG_AS_AVX512
-ccflags-y += -DDEBUG
+#ccflags-y += -DDEBUG
 
 #obj-m := spi-nor-mod.o
 #obj-m += altera-asmip2.o

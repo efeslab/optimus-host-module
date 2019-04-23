@@ -293,6 +293,8 @@ static uint64_t opae_check_page_size(u64 user_addr, u64 length)
     uint64_t pgsize;
     uint64_t off;
 
+    printk("jcma: check: user_addr=%#llx, length=%llx\n", user_addr, length);
+
     vma = find_vma(current->mm, user_addr);
     pgsize = vma_kernel_pagesize(vma);
 
@@ -389,8 +391,10 @@ long afu_dma_map_region(struct feature_platform_data *pdata,
         unsigned long va = user_addr + i * PGSIZE_4K;
         unsigned long pa = page_to_pfn(region->pages[i]) << PGSHIFT_4K;
 
+        /*
         printk("jcma: %s: iommu mapping page, va=%#016lx, pa=%#016lx\n",
                     __func__, va, pa);
+                    */
 
         if (cci_pci_iommu_domain == NULL) {
             printk("jcma: %s: iommu domain null\n", __func__);
@@ -445,7 +449,7 @@ free_region:
 long afu_dma_unmap_region(struct feature_platform_data *pdata, u64 iova)
 {
 	struct fpga_afu_dma_region *region;
-    int i;
+    int i, r;
     int npages, n4kpages;
     long pgsize;
     long pgshift;
@@ -470,6 +474,11 @@ long afu_dma_unmap_region(struct feature_platform_data *pdata, u64 iova)
 	dma_unmap_page(fpga_pdata_to_pcidev(pdata),
 		       region->iova, region->length, DMA_BIDIRECTIONAL);
 #else
+
+    r = iommu_unmap(cci_pci_iommu_domain, iova, region->length);
+    printk("jcma: unmap region size %#llx\n", r);
+
+    /*
     pgsize = opae_check_page_size(iova, region->length);
     pgshift = pgsize == PGSIZE_4K ? PGSHIFT_4K :
                 PGSIZE_2M ? PGSHIFT_2M : PGSHIFT_1G;
@@ -491,11 +500,12 @@ long afu_dma_unmap_region(struct feature_platform_data *pdata, u64 iova)
         }
 
         r = iommu_unmap(cci_pci_iommu_domain, va, pgsize);
-        if (r) {
+        if (r < pgsize) {
             printk("jcma: %s: iommu unmap page failed, va=%#016lx, pa=%#016lx,"
                         " returned %d\n", __func__, va, pa, r);
         }
     }
+    */
 
 #endif
 	afu_dma_unpin_pages(pdata, region);
