@@ -354,6 +354,8 @@ long afu_dma_map_region(struct feature_platform_data *pdata,
 		goto free_region;
 	}
 
+    /* we do not care whether the pages are continuous or not */
+#if 0
 	/* Only accept continuous pages, return error if no */
 	if (!afu_dma_check_continuous_pages(region)) {
 		dev_err(&pdata->dev->dev, "pages are not continuous\n");
@@ -361,7 +363,6 @@ long afu_dma_map_region(struct feature_platform_data *pdata,
 		goto unpin_pages;
 	}
 
-#if 0
 	/* As pages are continuous then start to do DMA mapping */
 	region->iova = dma_map_page(fpga_pdata_to_pcidev(pdata),
 				    region->pages[0], 0,
