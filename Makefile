@@ -4,18 +4,20 @@ PWD ?= $(pwd)
 cflags-y +=  -Wno-unused-value -Wno-unused-label -I$(PWD)/include -I$(PWD)/include/uapi -I$(PWD)/include/intel
 cflags-y += -I$(DESTDIR)/usr/src/intel-fpga-1.2.0-1/include -I$(DESTDIR)/usr/src/intel-fpga-1.2.0-1/include/uapi -I$(DESTDIR)/usr/src/intel-fpga-1.2.0-1/include/intel
 cflags-y += -I$(PWD)/build/include -I$(PWD)/build/include/uapi -I$(PWD)/build/include/intel
+cflags-y += -DDEBUG
 
 ccflags-y +=  -Wno-unused-value -Wno-unused-label -I$(PWD)/include -I$(PWD)/include/uapi -I$(PWD)/include/intel
 ccflags-y += -I$(DESTDIR)/usr/src/intel-fpga-1.2.0-1/include -I$(DESTDIR)/usr/src/intel-fpga-1.2.0-1/include/uapi -I$(DESTDIR)/usr/src/intel-fpga-1.2.0-1/include/intel
 ccflags-y += -I$(PWD)/build/include -I$(PWD)/build/include/uapi -I$(PWD)/build/include/intel
 ccflags-y += -DCONFIG_AS_AVX512
+ccflags-y += -DDEBUG
 
 #obj-m := spi-nor-mod.o
 #obj-m += altera-asmip2.o
 #obj-m += avmmi-bmc.o
-#obj-m += fpga-mgr-mod.o
+obj-m += fpga-mgr-mod.o
 obj-m += intel-fpga-pci.o
-#obj-m += intel-fpga-fme.o
+obj-m += intel-fpga-fme.o
 obj-m += intel-fpga-afu.o
 #obj-m += intel-fpga-pac-hssi.o
 #obj-m += intel-fpga-pac-iopll.o

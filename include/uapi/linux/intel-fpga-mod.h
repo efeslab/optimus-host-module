@@ -43,7 +43,6 @@
 #define FPGA_BASE 0
 #define PORT_BASE 0x40
 #define FME_BASE 0x80
-#define IOMMU_BASE 0xc0
 
 /* Common IOCTLs for both FME and AFU file descriptor */
 
@@ -352,7 +351,7 @@ struct fpga_fme_err_irq_set {
 
 #define FPGA_FME_ERR_SET_IRQ	_IO(FPGA_MAGIC, FME_BASE + 4)
 
-#define FPGA_IOMMU_ATTACH_DEV _IO(FPGA_MAGIC, IOMMU_BASE + 0)
-#define FPGA_IOMMU_DETACH_DEV _IO(FPGA_MAGIC, IOMMU_BASE + 1)
+#define FPGA_IOMMU_ATTACH_DEV _IO(FPGA_MAGIC, PORT_BASE + 11)
+#define FPGA_IOMMU_DETACH_DEV _IO(FPGA_MAGIC, PORT_BASE + 12)
 
 #endif /* _UAPI_INTEL_FPGA_H */

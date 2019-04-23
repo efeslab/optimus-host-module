@@ -225,10 +225,12 @@ void afu_dma_region_destroy(struct feature_platform_data *pdata)
 
 		rb_erase(node, &afu->dma_regions);
 
+#if 0
 		if (region->iova)
 			dma_unmap_page(fpga_pdata_to_pcidev(pdata),
 					region->iova, region->length,
 					DMA_BIDIRECTIONAL);
+#endif
 
 		if (region->pages)
 			afu_dma_unpin_pages(pdata, region);
@@ -297,8 +299,12 @@ static uint64_t opae_check_page_size(u64 user_addr, u64 length)
     if (pgsize == PGSIZE_4K)
         return PGSIZE_4K;
 
+    /*
     if (pgsize > length)
         return PGSIZE_4K;
+        */
+
+    printk("jcma: check: pgsize=%#llx\n", pgsize);
 
     for (off = pgsize; off < length; off += pgsize) {
         struct vm_area_struct *vma_iter;
@@ -374,7 +380,9 @@ long afu_dma_map_region(struct feature_platform_data *pdata,
                 PGSIZE_2M ? PGSHIFT_2M : PGSHIFT_1G;
     npages = length >> pgshift;
     n4kpages = length >> PGSHIFT_4K;
-    stride = pgshift / PGSHIFT_4K;
+    stride = n4kpages/npages;
+    printk("jcma: pgsize: %lx, pgshift: %llx, len: %llx, npages: %llx, n4kpages: %llx, stride: %d\n",
+                pgsize, pgshift, length, npages, n4kpages, stride);
     
     for (i=0; i<n4kpages; i+=stride) {
         int r;
@@ -423,8 +431,10 @@ long afu_dma_map_region(struct feature_platform_data *pdata,
 	return 0;
 
 unmap_dma:
+#if 0
 	dma_unmap_page(fpga_pdata_to_pcidev(pdata),
 		       region->iova, region->length, DMA_BIDIRECTIONAL);
+#endif
 unpin_pages:
 	afu_dma_unpin_pages(pdata, region);
 free_region:

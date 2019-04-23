@@ -895,6 +895,8 @@ static int afu_open(struct inode *inode, struct file *filp)
 	struct pid *pid;
 	int ret;
 
+    printk("jcma: afu open\n");
+
 	pdata = dev_get_platdata(&fdev->dev);
 	if (WARN_ON(!pdata))
 		return -ENODEV;
@@ -1159,6 +1161,8 @@ static long afu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
 	dev_dbg(&pdev->dev, "%s cmd 0x%x\n", __func__, cmd);
 
+    printk("jcma: ioctl\n");
+
 	switch (cmd) {
 	case FPGA_GET_API_VERSION:
 		return FPGA_API_VERSION;
@@ -1183,6 +1187,7 @@ static long afu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		 * handled in this sub feature, and returns 0 and other
 		 * error code if cmd is handled.
 		 */
+        printk("jcma: cannot find ioctl cmd\n");
 		fpga_dev_for_each_feature(pdata, f)
 			if (f->ops && f->ops->ioctl) {
 				ret = f->ops->ioctl(pdev, f, cmd, arg);
@@ -1276,6 +1281,7 @@ static int afu_probe(struct platform_device *pdev)
 	int ret;
 
 	dev_dbg(&pdev->dev, "%s\n", __func__);
+    printk("jcma: log...\n");
 
 	ret = afu_dev_init(pdev);
 	if (ret)
