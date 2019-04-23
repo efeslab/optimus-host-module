@@ -50,7 +50,7 @@ static int vaccel_time_slicing_init(struct vaccel *vaccel,
     vaccel->timeslc.trans_status = VACCEL_TRANSACTION_IDLE;
     vaccel->timeslc.start_time = 0;
     vaccel->timeslc.running_time = 0;
-    vaccel->firstrun = 1;
+    vaccel->timeslc.firstrun = 1;
     #ifdef SCHED_ENABLE_WEIGHT
     vaccel->timeslc.weight = 1;
     if (vaccel->seq_id == 0) {
