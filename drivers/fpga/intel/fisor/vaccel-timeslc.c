@@ -169,6 +169,8 @@ static int vaccel_time_slicing_submit(struct vaccel *vaccel)
         data64 = *(u64*)(vaccel->bar[VACCEL_BAR_0]+idx);
         if (data64 != 0) {
             writeq(data64, &mmio_base[idx]);
+            //vaccel_info(vaccel, "Submit to hardware, offset = %#x, value = %lld\n", 
+            //        idx, data64);
         }
     }
 
@@ -665,9 +667,13 @@ static int vaccel_time_slicing_handle_mmio_read(struct vaccel *vaccel,
             offset = offset + paccel->mmio_start;
             data64 = readq(&fisor->pafu_mmio[offset]);
             *val = data64;
+            //paccel_info(paccel, "Real MMIO read: offset 0x%x, value %llu\n",
+            //        offset - paccel->mmio_start, data64);
         }
         else {
             LOAD_LE64(&vaccel->bar[VACCEL_BAR_0][offset], *val);
+            //paccel_info(paccel, "Buffered MMIO read: offset 0x%x, value %llu\n",
+            //        offset, *val);
         }
     } else {
         switch (offset) {

@@ -181,7 +181,7 @@ typedef enum {
 } paccel_ts_sched_policy_t;
 
 #define PACCEL_TS_MAX_PERIOD_MS 1
-#define PACCEL_PREEMPT_WAIT_CYCLE 326728
+#define PACCEL_PREEMPT_WAIT_CYCLE 0
 
 struct paccel {
     struct fisor *fisor;
