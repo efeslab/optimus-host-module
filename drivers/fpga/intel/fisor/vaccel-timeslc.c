@@ -256,12 +256,14 @@ static inline void vaccel_record_abort(struct paccel *paccel, struct vaccel *vac
 
 static inline void vaccel_record_pause(struct paccel *paccel, struct vaccel *vaccel)
 {
+    struct fisor *fisor = paccel->fisor;
     fisor_info("kthread: Pause vaccel %d on paccel %d \n",
             vaccel->seq_id, paccel->accel_id);
     vaccel->timeslc.start_time = 0;
     vaccel->timeslc.trans_status = VACCEL_TRANSACTION_STARTED;
     STORE_LE64((u64*)&vaccel->bar[VACCEL_BAR_0][FISOR_TRANS_CTL],
             FISOR_TRANS_CTL_CONT);
+    vaccel->timeslc.clkcnt = readq(&fisor->pafu_mmio[paccel->mmio_start + 0x38]);
     paccel->timeslc.curr = NULL;
 }
 
@@ -667,7 +669,10 @@ static int vaccel_time_slicing_handle_mmio_read(struct vaccel *vaccel,
             *val = data64;
         }
         else {
-            LOAD_LE64(&vaccel->bar[VACCEL_BAR_0][offset], *val);
+            if (offset == 0x38)
+                *val = vaccel->timeslc.clkcnt;
+            else 
+                LOAD_LE64(&vaccel->bar[VACCEL_BAR_0][offset], *val);
         }
     } else {
         switch (offset) {
