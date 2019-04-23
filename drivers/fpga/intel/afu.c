@@ -27,6 +27,7 @@
 #include <linux/fs.h>
 #include <linux/dma-mapping.h>
 #include <linux/intel-fpga-mod.h>
+#include <linux/iommu.h>
 
 #include "pac-iopll.h"
 #include "afu.h"
@@ -1088,6 +1089,67 @@ afu_ioctl_dma_unmap(struct feature_platform_data *pdata, void __user *arg)
 	return afu_dma_unmap_region(pdata, unmap.iova);
 }
 
+struct iommu_domain *cci_pci_iommu_domain;
+EXPORT_SYMBOL_GPL(cci_pci_iommu_domain);
+
+int cci_pci_iommu_map_flags;
+EXPORT_SYMBOL_GPL(cci_pci_iommu_map_flags);
+
+static long
+afu_ioctl_iommu_attach_dev(struct feature_platform_data *pdata) {
+  int r;
+  struct device *dev = pdata->dev->dev.parent->parent;
+
+  if (!dev) {
+	  printk("jcma: %s: error, dev is NULL\n", __func__);
+	  return -1;
+  }
+
+  /* if the domain does not exist, alloc it first */
+  if (!cci_pci_iommu_domain) {
+	  cci_pci_iommu_domain = iommu_domain_alloc(&pci_bus_type);
+	  if (!cci_pci_iommu_domain) {
+		  printk("jcma: failed to alloc cci_pci_iommu_domain\n");
+		  return -1;
+	  }
+
+	  cci_pci_iommu_map_flags = IOMMU_READ | IOMMU_WRITE;
+	  if (iommu_capable(&pci_bus_type, IOMMU_CAP_CACHE_COHERENCY))
+		  cci_pci_iommu_map_flags |= IOMMU_CACHE;
+  }
+
+  r = iommu_attach_device(cci_pci_iommu_domain, dev);
+  if (r) {
+	  printk("jcma: attach device failed, returned %d\n", r);
+	  return -1;
+  }
+  else {
+	  printk("jcma: attach device success\n");
+  }
+
+  return 0;
+}
+
+static long
+afu_ioctl_iommu_detach_dev(struct feature_platform_data *pdata) {
+    struct device *dev = pdata->dev->dev.parent->parent;
+
+    printk("jcma: call %s\n", __func__);
+    if (!dev) {
+        printk("jcma: %s: error, dev is NULL\n", __func__);
+        return -1;
+    }
+
+    iommu_detach_device(cci_pci_iommu_domain, dev);
+
+    if (cci_pci_iommu_domain) {
+        iommu_domain_free(cci_pci_iommu_domain);
+        cci_pci_iommu_domain = NULL;
+    }
+
+    return 0;
+}
+
 static long afu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	struct platform_device *pdev = filp->private_data;
@@ -1110,6 +1172,10 @@ static long afu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		return afu_ioctl_dma_map(pdata, (void __user *)arg);
 	case FPGA_PORT_DMA_UNMAP:
 		return afu_ioctl_dma_unmap(pdata, (void __user *)arg);
+    case FPGA_IOMMU_ATTACH_DEV:
+        return afu_ioctl_iommu_attach_dev(pdata);
+    case FPGA_IOMMU_DETACH_DEV:
+        return afu_ioctl_iommu_detach_dev(pdata);
 	default:
 		/*
 		 * Let sub-feature's ioctl function to handle the cmd

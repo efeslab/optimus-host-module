@@ -22,6 +22,7 @@
 
 #include "backport.h"
 #include "feature-dev.h"
+#include <linux/iommu.h>
 
 struct fpga_afu_region {
 	u32 index;
@@ -80,5 +81,8 @@ int fpga_register_afu_mdev_device(struct platform_device *pdev);
 void fpga_unregister_afu_mdev_device(struct platform_device *pdev);
 
 extern struct feature_ops port_err_ops;
+
+extern struct iommu_domain *cci_pci_iommu_domain;
+extern int cci_pci_iommu_map_flags;
 
 #endif
