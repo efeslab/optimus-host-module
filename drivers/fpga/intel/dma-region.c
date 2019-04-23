@@ -287,7 +287,7 @@ long afu_dma_map_region(struct feature_platform_data *pdata,
 	if (user_addr + length < user_addr)
 		return -EINVAL;
 
-	if (!access_ok(VERIFY_WRITE, user_addr, length))
+	if (!access_ok(user_addr, length))
 		return -EINVAL;
 
 	region = kzalloc(sizeof(*region), GFP_KERNEL);

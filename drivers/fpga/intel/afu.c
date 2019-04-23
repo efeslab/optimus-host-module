@@ -1225,8 +1225,6 @@ static int afu_probe(struct platform_device *pdev)
 		goto dev_destroy;
 	}
 
-    fpga_register_afu_mdev_device(pdev);
-
 	return 0;
 
 dev_destroy:
@@ -1239,7 +1237,6 @@ static int afu_remove(struct platform_device *pdev)
 {
 	dev_dbg(&pdev->dev, "%s\n", __func__);
 
-    fpga_unregister_afu_mdev_device(pdev);
 	fpga_dev_feature_uinit(pdev);
 	fpga_unregister_dev_ops(pdev);
 	afu_dev_destroy(pdev);
