@@ -732,6 +732,7 @@ weights_store(struct device *dev,
             break;
         if (vacc->mode != VACCEL_TYPE_TIME_SLICING)
             continue;
+        vacc->timeslc.running_time = 0;
         if ((data & SCHED_WEIGHT_MASK) == 0)
             continue;
         pacc = vacc->paccel;
@@ -739,24 +740,6 @@ weights_store(struct device *dev,
             continue;
         vacc->timeslc.weight = data & SCHED_WEIGHT_MASK;
         data = data >> SCHED_WEIGHT_BIT;
-        mutex_lock(&pacc->ops_lock);
-
-        list_del(&vacc->timeslc.paccel_next);
-        list_for_each_entry(vacc2, &pacc->timeslc.children, timeslc.paccel_next) {
-            if (vacc2->timeslc.running_time * vacc->timeslc.weight >
-                    vacc->timeslc.running_time * vacc2->timeslc.weight)
-                break;
-        }
-        if (&vacc->timeslc.paccel_next == &pacc->timeslc.children) {
-            list_add_tail(&vacc->timeslc.paccel_next,
-                    &pacc->timeslc.children);
-        }
-        else {
-            list_add(&vacc->timeslc.paccel_next,
-                    vacc2->timeslc.paccel_next.prev);
-        }
-
-        mutex_unlock(&pacc->ops_lock);
     }
 
     mutex_unlock(&fisor->ops_lock);

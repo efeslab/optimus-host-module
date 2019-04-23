@@ -251,6 +251,7 @@ struct vaccel {
             u64 start_time;
             u64 running_time;
             u32 weight;
+            int firstrun;
             u64 clkcnt;
         } timeslc;
     };

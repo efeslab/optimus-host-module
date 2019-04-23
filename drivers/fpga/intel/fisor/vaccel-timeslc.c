@@ -50,6 +50,7 @@ static int vaccel_time_slicing_init(struct vaccel *vaccel,
     vaccel->timeslc.trans_status = VACCEL_TRANSACTION_IDLE;
     vaccel->timeslc.start_time = 0;
     vaccel->timeslc.running_time = 0;
+    vaccel->firstrun = 1;
     #ifdef SCHED_ENABLE_WEIGHT
     vaccel->timeslc.weight = 1;
     if (vaccel->seq_id == 0) {
@@ -241,6 +242,12 @@ static inline void vaccel_record_run(struct paccel *paccel, struct vaccel *vacce
     STORE_LE64((u64*)&vaccel->bar[VACCEL_BAR_0][FISOR_TRANS_CTL],
             FISOR_TRANS_CTL_BUSY);
     paccel->timeslc.curr = vaccel;
+    if (vaccel->timeslc.firstrun) {
+        vaccel->timeslc.firstrun = 0;
+        list_for_each_entry(vaccel, &paccel->timeslc.children, timeslc.paccel_next) {
+            vaccel->timeslc.running_time = 0;
+        }
+    }
 }
 
 static inline void vaccel_record_abort(struct paccel *paccel, struct vaccel *vaccel)
