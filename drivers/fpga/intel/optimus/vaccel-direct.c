@@ -1,5 +1,5 @@
 #include "afu.h"
-#include "fisor.h"
+#include "optimus.h"
 
 static int paccel_direct_dump(struct paccel *paccel)
 {
@@ -17,13 +17,13 @@ static int paccel_direct_dump(struct paccel *paccel)
 static int vaccel_direct_init(struct vaccel *vaccel,
                 struct paccel *paccel, struct mdev_device *mdev)
 {
-    struct fisor *fisor;
+    struct optimus *optimus;
 
     if (!mdev || !vaccel || !paccel)
         return -EINVAL;
 
-    fisor = paccel->fisor;
-    if (!fisor)
+    optimus = paccel->optimus;
+    if (!optimus)
         return -EINVAL;
 
     if (paccel->mode != VACCEL_TYPE_DIRECT) {
@@ -38,10 +38,10 @@ static int vaccel_direct_init(struct vaccel *vaccel,
 
     vaccel->mode = VACCEL_TYPE_DIRECT;
     vaccel->paccel = paccel;
-    vaccel->fisor = fisor;
+    vaccel->optimus = optimus;
     vaccel->gva_start = 0;
     vaccel->mdev = mdev;
-    vaccel->seq_id = atomic_fetch_add(1, &fisor->next_seq_id);
+    vaccel->seq_id = atomic_fetch_add(1, &optimus->next_seq_id);
     vaccel->iova_start = vaccel->seq_id * SIZE_64G + paccel->accel_id * tlb_opt_offset * PAGE_SIZE;
     vaccel->ops = &vaccel_direct_ops;
     vaccel->paging_notifier_gpa = 0;
@@ -50,7 +50,7 @@ static int vaccel_direct_init(struct vaccel *vaccel,
     vaccel_info(vaccel, "iova_start: %#llx", vaccel->iova_start);
 
     /* create pcie config space */
-    vaccel->vconfig = kzalloc(FISOR_CONFIG_SPACE_SIZE, GFP_KERNEL);
+    vaccel->vconfig = kzalloc(OPTIMUS_CONFIG_SPACE_SIZE, GFP_KERNEL);
     if (!vaccel->vconfig) {
         kfree(vaccel);
         return -ENOMEM;
@@ -58,8 +58,8 @@ static int vaccel_direct_init(struct vaccel *vaccel,
     vaccel_create_config_space(vaccel);
 
     /* allocate bar */
-    vaccel->bar[VACCEL_BAR_0] = kzalloc(FISOR_BAR_0_SIZE, GFP_KERNEL);
-    vaccel->bar[VACCEL_BAR_2] = kzalloc(FISOR_BAR_2_SIZE, GFP_KERNEL);
+    vaccel->bar[VACCEL_BAR_0] = kzalloc(OPTIMUS_BAR_0_SIZE, GFP_KERNEL);
+    vaccel->bar[VACCEL_BAR_2] = kzalloc(OPTIMUS_BAR_2_SIZE, GFP_KERNEL);
 
     /* register to mdev */
     mdev_set_drvdata(mdev, vaccel);
@@ -103,7 +103,7 @@ static int vaccel_direct_uinit(struct vaccel *vaccel)
 static int vaccel_direct_handle_mmio_read(struct vaccel *vaccel,
         u32 index, u32 offset, u64 *val)
 {
-    struct fisor *fisor = vaccel->fisor;
+    struct optimus *optimus = vaccel->optimus;
     struct paccel *paccel = vaccel->paccel;
     u64 data64;
 
@@ -124,7 +124,7 @@ static int vaccel_direct_handle_mmio_read(struct vaccel *vaccel,
         }
 
         offset = offset + paccel->mmio_start;
-        data64 = readq(&fisor->pafu_mmio[offset]);
+        data64 = readq(&optimus->pafu_mmio[offset]);
         *val = data64;
     } else {
         switch (offset) {
@@ -140,7 +140,7 @@ static int vaccel_direct_handle_mmio_read(struct vaccel *vaccel,
 static int vaccel_direct_handle_mmio_write(struct vaccel *vaccel,
         u32 index, u32 offset, u64 val)
 {
-    struct fisor *fisor = vaccel->fisor;
+    struct optimus *optimus = vaccel->optimus;
     struct paccel *paccel = vaccel->paccel;
     int ret;
 
@@ -161,7 +161,7 @@ static int vaccel_direct_handle_mmio_write(struct vaccel *vaccel,
         }
 
         offset = offset + paccel->mmio_start;
-        writeq(val, &fisor->pafu_mmio[offset]);
+        writeq(val, &optimus->pafu_mmio[offset]);
 
     } else if (index == VFIO_PCI_BAR2_REGION_INDEX) {
         ret = vaccel_handle_bar2_write(vaccel, offset, val);
@@ -206,8 +206,8 @@ static int vaccel_direct_close(struct mdev_device *mdev)
                 &vaccel->group_notifier);
 
     idx = srcu_read_lock(&vaccel->kvm->srcu);
-    iommu_unmap_region(vaccel->fisor->domain,
-                vaccel->fisor->iommu_map_flags,
+    iommu_unmap_region(vaccel->optimus->domain,
+                vaccel->optimus->iommu_map_flags,
                 vaccel->iova_start,
                 SIZE_64G >> PAGE_SHIFT);
     srcu_read_unlock(&vaccel->kvm->srcu, idx);

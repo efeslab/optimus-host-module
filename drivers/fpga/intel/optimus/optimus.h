@@ -32,19 +32,19 @@
 #include <linux/atomic.h>
 #include <linux/hugetlb.h>
 
-#define PGSHIFT_4K 12                                                                                                                                                                                                                                      
-#define PGSHIFT_2M 21                                                                                                                                                                                                                                      
-#define PGSHIFT_1G 30                                                                                                                                                                                                                                      
+#define PGSHIFT_4K 12
+#define PGSHIFT_2M 21
+#define PGSHIFT_1G 30
 
-#define PGSIZE_4K (1UL << PGSHIFT_4K)                                                                                                                                                                                                                      
-#define PGSIZE_2M (1UL << PGSHIFT_2M)                                                                                                                                                                                                                      
-#define PGSIZE_1G (1UL << PGSHIFT_1G)                                                                                                                                                                                                                      
+#define PGSIZE_4K (1UL << PGSHIFT_4K)
+#define PGSIZE_2M (1UL << PGSHIFT_2M)                                                                                   
+#define PGSIZE_1G (1UL << PGSHIFT_1G)
 
-#define PGSIZE_FLAG_4K (1 << 0)                                                                                                                                                                                                                            
-#define PGSIZE_FLAG_2M (1 << 1)                                                                                                                                                                                                                            
-#define PGSIZE_FLAG_1G (1 << 2)                                                                                                                                                                                                                            
-                                                                                                                                                                                                                                                           
-#define MAP_BEHAVISOR_MAP 0x0                                                                                                                                                                                                                              
+#define PGSIZE_FLAG_4K (1 << 0)
+#define PGSIZE_FLAG_2M (1 << 1)
+#define PGSIZE_FLAG_1G (1 << 2)
+
+#define MAP_BEHAVISOR_MAP 0x0
 #define MAP_BEHAVISOR_UNMAP 0x1
 
 #define PAGE4K_ALIGNED(addr) IS_ALIGNED((unsigned long)(addr), PGSIZE_4K)
@@ -54,15 +54,15 @@
 #define VERSION_STRING  "0.1"
 #define DRIVER_AUTHOR   "Jiacheng Ma"
 
-#define FISOR_CLASS_NAME  "fisor"
+#define OPTIMUS_CLASS_NAME  "optimus"
 
-#define FISOR_NAME        "fisor"
+#define OPTIMUS_NAME        "optimus"
 
 #define CL(x) ((x)*64)
 
-#define FISOR_STRING_LEN		64
+#define OPTIMUS_STRING_LEN		64
 
-#define FISOR_CONFIG_SPACE_SIZE  0xff
+#define OPTIMUS_CONFIG_SPACE_SIZE  0xff
 
 #define LOAD_LE16(addr, val)   (val = *(u16 *)addr)
 #define LOAD_LE32(addr, val)   (val = *(u32 *)addr)
@@ -72,18 +72,18 @@
 #define STORE_LE32(addr, val)   (*(u32 *)addr = val)
 #define STORE_LE64(addr, val)   (*(u64 *)addr = val)
 
-#define FISOR_VFIO_PCI_OFFSET_SHIFT   40
+#define OPTIMUS_VFIO_PCI_OFFSET_SHIFT   40
 
-#define FISOR_VFIO_PCI_OFFSET_TO_INDEX(off)   (off >> FISOR_VFIO_PCI_OFFSET_SHIFT)
-#define FISOR_VFIO_PCI_INDEX_TO_OFFSET(index) \
-				((u64)(index) << FISOR_VFIO_PCI_OFFSET_SHIFT)
-#define FISOR_VFIO_PCI_OFFSET_MASK    \
-				(((u64)(1) << FISOR_VFIO_PCI_OFFSET_SHIFT) - 1)
+#define OPTIMUS_VFIO_PCI_OFFSET_TO_INDEX(off)   (off >> OPTIMUS_VFIO_PCI_OFFSET_SHIFT)
+#define OPTIMUS_VFIO_PCI_INDEX_TO_OFFSET(index) \
+				((u64)(index) << OPTIMUS_VFIO_PCI_OFFSET_SHIFT)
+#define OPTIMUS_VFIO_PCI_OFFSET_MASK    \
+				(((u64)(1) << OPTIMUS_VFIO_PCI_OFFSET_SHIFT) - 1)
 
 struct paccel;
 struct vaccel;
 
-struct fisor {
+struct optimus {
     struct device *pafu_device;
     u8 *pafu_mmio;
     struct list_head next;
@@ -103,14 +103,14 @@ struct fisor {
 #define SIZE_64G (64*1024*1024*1024LLU)
 #define SIZE_4K 4096LLU
 
-#define FISOR_BAR_0_SIZE 0x1000
-#define FISOR_BAR_2_SIZE 0x100
-#define FISOR_BAR_0_MASK ~(FISOR_BAR_0_SIZE - 1)
-#define FISOR_BAR_2_MASK ~(FISOR_BAR_2_SIZE - 1)
+#define OPTIMUS_BAR_0_SIZE 0x1000
+#define OPTIMUS_BAR_2_SIZE 0x100
+#define OPTIMUS_BAR_0_MASK ~(OPTIMUS_BAR_0_SIZE - 1)
+#define OPTIMUS_BAR_2_MASK ~(OPTIMUS_BAR_2_SIZE - 1)
 
-#define FISOR_GUID_HI 0xd1d383aaca4c4c60
-#define FISOR_GUID_LO 0xa0a013a421139e69
-#define FISOR_MAGIC 0xfffff
+#define OPTIMUS_GUID_HI 0xd1d383aaca4c4c60
+#define OPTIMUS_GUID_LO 0xa0a013a421139e69
+#define OPTIMUS_MAGIC 0xfffff
 
 enum {
     VACCEL_BAR_0,
@@ -121,7 +121,7 @@ enum {
 typedef enum {
     VACCEL_TYPE_DIRECT,
     VACCEL_TYPE_TIME_SLICING
-} fisor_mode_t;
+} optimus_mode_t;
 
 struct paccel_ops {
     int (*vaccel_init)(struct vaccel *vaccel, struct paccel *paccel, struct mdev_device *mdev);
@@ -137,8 +137,8 @@ struct vaccel_ops {
     int (*soft_reset)(struct vaccel *vaccel);
 };
 
-extern struct mutex fisor_list_lock;
-extern struct list_head fisor_list;
+extern struct mutex optimus_list_lock;
+extern struct list_head optimus_list;
 
 extern struct paccel_ops paccel_direct_ops;
 extern struct paccel_ops paccel_time_slicing_ops;
@@ -146,8 +146,8 @@ extern struct vaccel_ops vaccel_direct_ops;
 extern struct vaccel_ops vaccel_time_slicing_ops;
 
 struct paccel {
-    struct fisor *fisor;
-    fisor_mode_t mode;
+    struct optimus *optimus;
+    optimus_mode_t mode;
 
     u32 mode_id;
     u32 accel_id;
@@ -179,13 +179,13 @@ typedef enum {
 } vaccel_trans_stat_t;
 
 struct vaccel {
-    struct fisor *fisor;
+    struct optimus *optimus;
     struct paccel *paccel;
 
     u8 *vconfig;
     u8 *bar[VACCEL_BAR_NUM];
 
-    fisor_mode_t mode;
+    optimus_mode_t mode;
     u32 seq_id;
 
     bool enabled;
@@ -234,11 +234,11 @@ int vaccel_read_gpa(struct vaccel *vaccel,
             u64 gpa, void *buf, u64 len);
 
 struct paccel* kobj_to_paccel(struct kobject *kobj,
-            struct fisor *fisor, struct mdev_device *mdev,
-            fisor_mode_t *mode, u32 *mode_id);
-struct fisor* mdev_to_fisor(struct mdev_device *mdev);
-struct fisor* pdev_to_fisor(struct platform_device *pdev);
-struct fisor* device_to_fisor(struct device *pafu);
+            struct optimus *optimus, struct mdev_device *mdev,
+            optimus_mode_t *mode, u32 *mode_id);
+struct optimus* mdev_to_optimus(struct mdev_device *mdev);
+struct optimus* pdev_to_optimus(struct platform_device *pdev);
+struct optimus* device_to_optimus(struct device *pafu);
 
 void iommu_unmap_region(struct iommu_domain *domain,
                 int flags, u64 start, u64 npages);
@@ -246,7 +246,7 @@ int vaccel_iommu_page_map(struct vaccel *vaccel,
             u64 gpa, u64 gva, u64 pgsize);
 void vaccel_iommu_page_unmap(struct vaccel *vaccel, u64 gva, u64 pgsize);
 
-void dump_paccels(struct fisor *fisor);
+void dump_paccels(struct optimus *optimus);
 
 void vaccel_create_config_space(struct vaccel *vaccel);
 void do_paccel_soft_reset(struct paccel *paccel, bool lock);
@@ -257,22 +257,22 @@ int vaccel_handle_bar2_write(struct vaccel *vaccel,
 int vaccel_group_notifier(struct notifier_block *nb,
             long unsigned int action, void *data);
 
-extern int fisor_dbg;
+extern int optimus_dbg;
 extern unsigned long long tlb_opt_offset;
 
-#define fisor_err(fmt, args...) \
-    if (fisor_dbg) {pr_err("fisor: "fmt, ##args);}
-#define fisor_info(fmt, args...) \
-    if (fisor_dbg) {pr_info("fisor: "fmt, ##args);}
+#define optimus_err(fmt, args...) \
+    if (optimus_dbg) {pr_err("optimus: "fmt, ##args);}
+#define optimus_info(fmt, args...) \
+    if (optimus_dbg) {pr_info("optimus: "fmt, ##args);}
 
 #define paccel_err(paccel, fmt, args...) \
-    if (fisor_dbg) {pr_err("paccel[%d]: "fmt, paccel->accel_id, ##args);}
+    if (optimus_dbg) {pr_err("paccel[%d]: "fmt, paccel->accel_id, ##args);}
 #define paccel_info(paccel, fmt, args...) \
-    if (fisor_dbg) {pr_info("paccel[%d]: "fmt, paccel->accel_id, ##args);}
+    if (optimus_dbg) {pr_info("paccel[%d]: "fmt, paccel->accel_id, ##args);}
 
 #define vaccel_err(vaccel, fmt, args...) \
-    if (fisor_dbg) {pr_err("vaccel[%d]: "fmt, vaccel->seq_id, ##args);}
+    if (optimus_dbg) {pr_err("vaccel[%d]: "fmt, vaccel->seq_id, ##args);}
 #define vaccel_info(vaccel, fmt, args...) \
-    if (fisor_dbg) {pr_info("vaccel[%d]: "fmt, vaccel->seq_id, ##args);}
+    if (optimus_dbg) {pr_info("vaccel[%d]: "fmt, vaccel->seq_id, ##args);}
 
 #endif /* _VAI_INTERNAL_H_ */
