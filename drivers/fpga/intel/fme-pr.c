@@ -343,7 +343,7 @@ static int fme_pr(struct platform_device *pdev, unsigned long arg)
 		return -EINVAL;
 	}
 
-	if (!access_ok(VERIFY_READ, port_pr.buffer_address,
+	if (!access_ok(port_pr.buffer_address,
 				    port_pr.buffer_size))
 		return -EFAULT;
 
