@@ -81,7 +81,7 @@
 #define FISOR_VFIO_PCI_OFFSET_MASK    \
 				(((u64)(1) << FISOR_VFIO_PCI_OFFSET_SHIFT) - 1)
 
-#define SCHED_ENABLE_WEIGHT
+//#define SCHED_ENABLE_WEIGHT
 
 #ifdef SCHED_ENABLE_WEIGHT
 #define SCHED_WEIGHT_BIT 4
@@ -324,5 +324,7 @@ extern unsigned long long tlb_opt_offset;
     if (fisor_dbg) {pr_info("vaccel[%d]: "fmt, vaccel->seq_id, ##args);}
 
 #endif
+
+extern int fisor_timeslc_mask;
 
 #endif /* _VAI_INTERNAL_H_ */

@@ -8,6 +8,9 @@ MODULE_PARM_DESC(fisor_dbg, "enable debug info, default: 0");
 unsigned long long tlb_opt_offset = 0;
 module_param(tlb_opt_offset, ullong, 0664);
 MODULE_PARM_DESC(tlb_opt_offset, "number of 4k pages offset applied after page slicing, default: 0");
+int fisor_timeslc_mask = 0;
+module_param(fisor_timeslc_mask, int, 0644);
+MODULE_PARM_DESC(fisor_timeslc_mask, "enable time multiplexing, default: 0x0");
 //FIXME: replace previous hardcoded offset with tlb_opt_offset
 
 DEFINE_MUTEX(fisor_list_lock);
@@ -972,7 +975,7 @@ fisor_mdev_get_fops(u32 num_direct, u32 num_timeslicing)
 
 static int fisor_probe(struct fisor *fisor, u32 *ndirect, u32 *nts)
 {
-    /* TODO: base on real hardware */
+    /* TODO: base on real hardware instead of mask */
 
     int i;
     int npaccels = readq(&fisor->pafu_mmio[0x20]);
@@ -981,9 +984,20 @@ static int fisor_probe(struct fisor *fisor, u32 *ndirect, u32 *nts)
     fisor->paccels =
             kzalloc(sizeof(struct paccel)*npaccels, GFP_KERNEL);
 
+    *ndirect = 0;
+    *nts = 0;
+
     for (i=0; i<npaccels; i++) {
-        /* TODO: match the magic */
-        fisor->paccels[i].mode = VACCEL_TYPE_TIME_SLICING;
+        int tmp = 1 << i;
+        if (fisor_timeslc_mask & tmp) {
+            fisor->paccels[i].mode = VACCEL_TYPE_TIME_SLICING;
+            (*ndirect)+=1;
+        }
+        else {
+            fisor->paccels[i].mode = VACCEL_TYPE_DIRECT;
+            (*nts)+=1;
+        }
+
         fisor->paccels[i].mode_id = i;
         fisor->paccels[i].accel_id = i;
         fisor->paccels[i].mmio_start = 0x1000*(i+1);
@@ -1012,9 +1026,6 @@ static int fisor_probe(struct fisor *fisor, u32 *ndirect, u32 *nts)
 
         mutex_init(&fisor->paccels[i].ops_lock);
     }
-
-    *ndirect = 0;
-    *nts = npaccels;
 
     return 0;
 }
