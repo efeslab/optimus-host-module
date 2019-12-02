@@ -991,14 +991,15 @@ static int fisor_probe(struct fisor *fisor, u32 *ndirect, u32 *nts)
         int tmp = 1 << i;
         if (fisor_timeslc_mask & tmp) {
             fisor->paccels[i].mode = VACCEL_TYPE_TIME_SLICING;
-            (*ndirect)+=1;
+            fisor->paccels[i].mode_id = *nts;
+            (*nts)+=1;
         }
         else {
             fisor->paccels[i].mode = VACCEL_TYPE_DIRECT;
-            (*nts)+=1;
+            fisor->paccels[i].mode_id = *ndirect;
+            (*ndirect)+=1;
         }
 
-        fisor->paccels[i].mode_id = i;
         fisor->paccels[i].accel_id = i;
         fisor->paccels[i].mmio_start = 0x1000*(i+1);
         fisor->paccels[i].mmio_size = 0x1000;
