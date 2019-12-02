@@ -1,56 +1,56 @@
 #include <linux/moduleparam.h>
 #include "afu.h"
-#include "fisor.h"
+#include "optimus.h"
 
-int fisor_dbg = 0;
-module_param(fisor_dbg, int, 0664);
-MODULE_PARM_DESC(fisor_dbg, "enable debug info, default: 0");
+int optimus_dbg = 0;
+module_param(optimus_dbg, int, 0664);
+MODULE_PARM_DESC(optimus_dbg, "enable debug info, default: 0");
 unsigned long long tlb_opt_offset = 0;
 module_param(tlb_opt_offset, ullong, 0664);
 MODULE_PARM_DESC(tlb_opt_offset, "number of 4k pages offset applied after page slicing, default: 0");
-int fisor_timeslc_mask = 0;
-module_param(fisor_timeslc_mask, int, 0644);
-MODULE_PARM_DESC(fisor_timeslc_mask, "enable time multiplexing, default: 0x0");
+int optimus_timeslc_mask = 0;
+module_param(optimus_timeslc_mask, int, 0644);
+MODULE_PARM_DESC(optimus_timeslc_mask, "enable time multiplexing, default: 0x0");
 //FIXME: replace previous hardcoded offset with tlb_opt_offset
 
-DEFINE_MUTEX(fisor_list_lock);
-struct list_head fisor_list = LIST_HEAD_INIT(fisor_list);
+DEFINE_MUTEX(optimus_list_lock);
+struct list_head optimus_list = LIST_HEAD_INIT(optimus_list);
 
-void dump_paccels(struct fisor *fisor)
+void dump_paccels(struct optimus *optimus)
 {
     struct paccel *paccels;
     int i;
 
-    if (!fisor) {
-        fisor_info("%s: failed\n", __func__);
+    if (!optimus) {
+        optimus_info("%s: failed\n", __func__);
         return;
     }
     
-    paccels = fisor->paccels;
+    paccels = optimus->paccels;
     if (!paccels) {
-        fisor_info("%s: paccels empty\n", __func__);
+        optimus_info("%s: paccels empty\n", __func__);
         return;
     }
 
-    for (i=0; i<fisor->npaccels; i++) {
-        struct paccel *paccel = &fisor->paccels[i];
+    for (i=0; i<optimus->npaccels; i++) {
+        struct paccel *paccel = &optimus->paccels[i];
         paccel->ops->dump(paccel);
     }
 }
 
-static int fisor_iommu_fault_handler(struct iommu_domain *domain,
+static int optimus_iommu_fault_handler(struct iommu_domain *domain,
             struct device *dev, unsigned long iova, int flags, void *arg)
 {
-    fisor_err("iommu page fault at %lx\n", iova);
+    optimus_err("iommu page fault at %lx\n", iova);
     return 0;
 }
 
 int vaccel_create(struct kobject *kobj, struct mdev_device *mdev)
 {
-    struct fisor *fisor;
+    struct optimus *optimus;
     struct paccel *paccel;
     struct vaccel *vaccel;
-    fisor_mode_t mode;
+    optimus_mode_t mode;
     u32 mode_id = ~0;
     int ret;
 
@@ -61,8 +61,8 @@ int vaccel_create(struct kobject *kobj, struct mdev_device *mdev)
     if (!vaccel)
         return -ENOMEM;
 
-    fisor = mdev_to_fisor(mdev);
-    paccel = kobj_to_paccel(kobj, fisor, mdev, &mode, &mode_id);
+    optimus = mdev_to_optimus(mdev);
+    paccel = kobj_to_paccel(kobj, optimus, mdev, &mode, &mode_id);
     if (!paccel) {
         paccel_err(paccel,
                 "%s: cannot decode mode and mode id", __func__);
@@ -81,10 +81,10 @@ int vaccel_create(struct kobject *kobj, struct mdev_device *mdev)
         return ret;
     }
 
-    /* add to fisor->vaccel_list */
-    mutex_lock(&fisor->ops_lock);
-    list_add(&vaccel->next, &fisor->vaccel_list);
-    mutex_unlock(&fisor->ops_lock);
+    /* add to optimus->vaccel_list */
+    mutex_lock(&optimus->ops_lock);
+    list_add(&vaccel->next, &optimus->vaccel_list);
+    mutex_unlock(&optimus->ops_lock);
 
     /* dump result */
     vaccel_info(vaccel,
@@ -93,7 +93,7 @@ int vaccel_create(struct kobject *kobj, struct mdev_device *mdev)
             vaccel->mode==VACCEL_TYPE_DIRECT?"direct":"timeslicing",
             vaccel->paccel->mode_id,
             vaccel->gva_start);
-    dump_paccels(fisor);
+    dump_paccels(optimus);
 
     return 0;
 }
@@ -102,21 +102,21 @@ int vaccel_remove(struct mdev_device *mdev)
 {
     struct vaccel *mds, *tmp_mds;
     struct vaccel *vaccel = mdev_get_drvdata(mdev);
-    struct fisor *fisor = mdev_to_fisor(mdev);
+    struct optimus *optimus = mdev_to_optimus(mdev);
     struct paccel *paccel = vaccel->paccel;
     int ret = -EINVAL;
 
-    fisor_info("call: %s on vaccel %d \n",__func__, vaccel->seq_id);
+    optimus_info("call: %s on vaccel %d \n",__func__, vaccel->seq_id);
 
-    mutex_lock(&fisor->ops_lock);
-    list_for_each_entry_safe(mds, tmp_mds, &fisor->vaccel_list, next) {
+    mutex_lock(&optimus->ops_lock);
+    list_for_each_entry_safe(mds, tmp_mds, &optimus->vaccel_list, next) {
         if (vaccel == mds) {
             list_del(&vaccel->next);
 
             ret = paccel->ops->vaccel_uinit(vaccel);
             if (ret) {
                 paccel_err(paccel, "uinitialization failed");
-                mutex_unlock(&fisor->ops_lock);
+                mutex_unlock(&optimus->ops_lock);
                 return ret;
             }
             
@@ -125,7 +125,7 @@ int vaccel_remove(struct mdev_device *mdev)
             break;
         }
     }
-    mutex_unlock(&fisor->ops_lock);
+    mutex_unlock(&optimus->ops_lock);
 
     return ret;
 }
@@ -199,7 +199,7 @@ static void handle_pci_cfg_write(struct vaccel *vaccel, u32 offset,
     case 0x10: /* BAR0 */
     case 0x14: /* BAR1: upper 32 bits of BAR0 */
         if (new == 0xffffffff) {
-            size = ~(FISOR_BAR_0_SIZE - 1);
+            size = ~(OPTIMUS_BAR_0_SIZE - 1);
             vaccel_write_cfg_bar(vaccel, offset, size >> (lo ? 0 : 32), lo);
         }
         else {
@@ -209,7 +209,7 @@ static void handle_pci_cfg_write(struct vaccel *vaccel, u32 offset,
     case 0x18: /* BAR2 */
     case 0x1c: /* BAR3: upper 32 bits of BAR2 */
         if (new == 0xffffffff) {
-            size = ~(FISOR_BAR_2_SIZE - 1);
+            size = ~(OPTIMUS_BAR_2_SIZE - 1);
             vaccel_write_cfg_bar(vaccel, offset, size >> (lo ? 0 : 32), lo);
         }
         else {
@@ -234,7 +234,7 @@ static void handle_bar_write(unsigned int index, struct vaccel *vaccel,
     u64 data64 = *(u64*)buf;
 
     if (!vaccel || !vaccel->ops) {
-        fisor_err("vaccel null ptr");
+        optimus_err("vaccel null ptr");
         return;
     }
 
@@ -251,7 +251,7 @@ static void handle_bar_read(unsigned int index, struct vaccel *vaccel,
     u64 data64;
 
     if (!vaccel || !vaccel->ops) {
-        fisor_err("vaccel null ptr");
+        optimus_err("vaccel null ptr");
         return;
     }
 
@@ -283,8 +283,8 @@ static ssize_t vaccel_access(struct mdev_device *mdev, char *buf, size_t count,
 
 	mutex_lock(&vaccel->ops_lock);
 
-	index = FISOR_VFIO_PCI_OFFSET_TO_INDEX(pos);
-	offset = pos & FISOR_VFIO_PCI_OFFSET_MASK;
+	index = OPTIMUS_VFIO_PCI_OFFSET_TO_INDEX(pos);
+	offset = pos & OPTIMUS_VFIO_PCI_OFFSET_MASK;
 	switch (index) {
 	case VFIO_PCI_CONFIG_REGION_INDEX:
 
@@ -515,13 +515,13 @@ static int vaccel_get_region_info(struct mdev_device *mdev,
 
     switch (region_index) {
     case VFIO_PCI_CONFIG_REGION_INDEX:
-        size = FISOR_CONFIG_SPACE_SIZE;
+        size = OPTIMUS_CONFIG_SPACE_SIZE;
         break;
     case VFIO_PCI_BAR0_REGION_INDEX:
-        size = FISOR_BAR_0_SIZE;
+        size = OPTIMUS_BAR_0_SIZE;
         break;
     case VFIO_PCI_BAR2_REGION_INDEX:
-        size = FISOR_BAR_2_SIZE;
+        size = OPTIMUS_BAR_2_SIZE;
         break;
     default:
         size = 0;
@@ -529,7 +529,7 @@ static int vaccel_get_region_info(struct mdev_device *mdev,
     }
 
     region_info->size = size;
-    region_info->offset = FISOR_VFIO_PCI_INDEX_TO_OFFSET(region_index);
+    region_info->offset = OPTIMUS_VFIO_PCI_INDEX_TO_OFFSET(region_index);
     region_info->flags = VFIO_REGION_INFO_FLAG_READ |
         VFIO_REGION_INFO_FLAG_WRITE;
 
@@ -570,9 +570,9 @@ static int vaccel_reset(struct mdev_device *mdev)
 
     vaccel_close(mdev);
 
-    memset(vaccel->vconfig, 0, FISOR_CONFIG_SPACE_SIZE);
-    memset(vaccel->bar[VACCEL_BAR_0], 0, FISOR_BAR_0_SIZE);
-    memset(vaccel->bar[VACCEL_BAR_2], 0, FISOR_BAR_2_SIZE);
+    memset(vaccel->vconfig, 0, OPTIMUS_CONFIG_SPACE_SIZE);
+    memset(vaccel->bar[VACCEL_BAR_0], 0, OPTIMUS_BAR_0_SIZE);
+    memset(vaccel->bar[VACCEL_BAR_2], 0, OPTIMUS_BAR_2_SIZE);
 
     vaccel_create_config_space(vaccel);
     vaccel->gva_start = 0;
@@ -688,10 +688,10 @@ static ssize_t
 info_show(struct device *dev,
             struct device_attribute *attr, char *buf)
 {
-    struct fisor *fisor = device_to_fisor(dev);
+    struct optimus *optimus = device_to_optimus(dev);
 
     return sprintf(buf, "This is a physical FPGA with %d accelerators.\n",
-                        fisor->npaccels);
+                        optimus->npaccels);
 }
 static DEVICE_ATTR_RO(info);
 
@@ -701,9 +701,9 @@ weights_show(struct device *dev,
 {
     #ifdef SCHED_ENABLE_WEIGHT
 
-    struct fisor *fisor = device_to_fisor(dev);
+    struct optimus *optimus = device_to_optimus(dev);
 
-    return sprintf(buf, "%016llx\n", fisor->weights);
+    return sprintf(buf, "%016llx\n", optimus->weights);
 
     #else
 	return sprintf(buf, "0\n");
@@ -716,7 +716,7 @@ weights_store(struct device *dev,
 {
     #ifdef SCHED_ENABLE_WEIGHT
 
-    struct fisor *fisor = device_to_fisor(dev);
+    struct optimus *optimus = device_to_optimus(dev);
     int err;
     u64 data;
     struct vaccel *vacc, *vacc2;
@@ -726,11 +726,11 @@ weights_store(struct device *dev,
     if (err)
         return err;
 
-    fisor->weights = data;
+    optimus->weights = data;
 
-    mutex_lock(&fisor->ops_lock);
+    mutex_lock(&optimus->ops_lock);
 
-    list_for_each_entry(vacc, &fisor->next, next) {
+    list_for_each_entry(vacc, &optimus->next, next) {
         if (vacc->seq_id >= 64/SCHED_WEIGHT_BIT)
             break;
         if (vacc->mode != VACCEL_TYPE_TIME_SLICING)
@@ -762,7 +762,7 @@ weights_store(struct device *dev,
         mutex_unlock(&pacc->ops_lock);
     }
 
-    mutex_unlock(&fisor->ops_lock);
+    mutex_unlock(&optimus->ops_lock);
 
     #endif
 
@@ -771,19 +771,19 @@ weights_store(struct device *dev,
 
 static DEVICE_ATTR_RW(weights);
 
-static struct attribute *fisor_attrs[] = {
+static struct attribute *optimus_attrs[] = {
     &dev_attr_info.attr,
     &dev_attr_weights.attr,
     NULL,
 };
 
-static const struct attribute_group fisor_dev_group = {
-    .name = "fisor",
-    .attrs = fisor_attrs,
+static const struct attribute_group optimus_dev_group = {
+    .name = "optimus",
+    .attrs = optimus_attrs,
 };
 
-const static struct attribute_group *fisor_dev_groups[] = {
-    &fisor_dev_group,
+const static struct attribute_group *optimus_dev_groups[] = {
+    &optimus_dev_group,
     NULL,
 };
 
@@ -797,7 +797,7 @@ vaccel_hw_id_show(struct device *dev,
     struct vaccel *vaccel = mdev_get_drvdata(mdev);
 
     u64 guidh, guidl;
-    u8 *mmio = vaccel->fisor->pafu_mmio;
+    u8 *mmio = vaccel->optimus->pafu_mmio;
     u32 off = vaccel->paccel->mmio_start;
 
     guidl = readq(&mmio[off+0x8]);
@@ -882,7 +882,7 @@ static struct attribute *vaccel_timeslicing_types_attrs[] = {
 };
 
 static struct mdev_parent_ops*
-fisor_mdev_get_fops(u32 num_direct, u32 num_timeslicing)
+optimus_mdev_get_fops(u32 num_direct, u32 num_timeslicing)
 {
     struct mdev_parent_ops *fops;
     struct attribute_group **type_groups;
@@ -904,7 +904,7 @@ fisor_mdev_get_fops(u32 num_direct, u32 num_timeslicing)
             return NULL;
         }
 
-        name = kzalloc(FISOR_STRING_LEN, GFP_KERNEL);
+        name = kzalloc(OPTIMUS_STRING_LEN, GFP_KERNEL);
         if (name == NULL) {
             kfree(type_groups);
             kfree(type_group);
@@ -930,7 +930,7 @@ fisor_mdev_get_fops(u32 num_direct, u32 num_timeslicing)
             return NULL;
         }
 
-        name = kzalloc(FISOR_STRING_LEN, GFP_KERNEL);
+        name = kzalloc(OPTIMUS_STRING_LEN, GFP_KERNEL);
         if (name == NULL) {
             kfree(type_groups);
             kfree(type_group);
@@ -959,7 +959,7 @@ fisor_mdev_get_fops(u32 num_direct, u32 num_timeslicing)
     }
 
     fops->owner = THIS_MODULE;
-    fops->dev_attr_groups = fisor_dev_groups;
+    fops->dev_attr_groups = optimus_dev_groups;
     fops->mdev_attr_groups = vaccel_dev_groups;
     fops->supported_type_groups = type_groups;
     fops->create = vaccel_create;
@@ -973,15 +973,15 @@ fisor_mdev_get_fops(u32 num_direct, u32 num_timeslicing)
     return fops;
 }
 
-static int fisor_probe(struct fisor *fisor, u32 *ndirect, u32 *nts)
+static int optimus_probe(struct optimus *optimus, u32 *ndirect, u32 *nts)
 {
     /* TODO: base on real hardware instead of mask */
 
     int i;
-    int npaccels = readq(&fisor->pafu_mmio[0x20]);
+    int npaccels = readq(&optimus->pafu_mmio[0x20]);
 
-    fisor->npaccels = npaccels;
-    fisor->paccels =
+    optimus->npaccels = npaccels;
+    optimus->paccels =
             kzalloc(sizeof(struct paccel)*npaccels, GFP_KERNEL);
 
     *ndirect = 0;
@@ -989,88 +989,88 @@ static int fisor_probe(struct fisor *fisor, u32 *ndirect, u32 *nts)
 
     for (i=0; i<npaccels; i++) {
         int tmp = 1 << i;
-        if (fisor_timeslc_mask & tmp) {
-            fisor->paccels[i].mode = VACCEL_TYPE_TIME_SLICING;
-            fisor->paccels[i].mode_id = *nts;
+        if (optimus_timeslc_mask & tmp) {
+            optimus->paccels[i].mode = VACCEL_TYPE_TIME_SLICING;
+            optimus->paccels[i].mode_id = *nts;
             (*nts)+=1;
         }
         else {
-            fisor->paccels[i].mode = VACCEL_TYPE_DIRECT;
-            fisor->paccels[i].mode_id = *ndirect;
+            optimus->paccels[i].mode = VACCEL_TYPE_DIRECT;
+            optimus->paccels[i].mode_id = *ndirect;
             (*ndirect)+=1;
         }
 
-        fisor->paccels[i].accel_id = i;
-        fisor->paccels[i].mmio_start = 0x1000*(i+1);
-        fisor->paccels[i].mmio_size = 0x1000;
+        optimus->paccels[i].accel_id = i;
+        optimus->paccels[i].mmio_start = 0x1000*(i+1);
+        optimus->paccels[i].mmio_size = 0x1000;
 
-        fisor->paccels[i].fisor = fisor;
+        optimus->paccels[i].optimus = optimus;
 
-        if (fisor->paccels[i].mode == VACCEL_TYPE_DIRECT) {
-            fisor->paccels[i].direct.occupied = false;
-            fisor->paccels[i].ops = &paccel_direct_ops;
+        if (optimus->paccels[i].mode == VACCEL_TYPE_DIRECT) {
+            optimus->paccels[i].direct.occupied = false;
+            optimus->paccels[i].ops = &paccel_direct_ops;
         }
         else {
-            fisor->paccels[i].timeslc.total = 16;
-            fisor->paccels[i].timeslc.occupied = 0;
-            fisor->paccels[i].timeslc.policy =
+            optimus->paccels[i].timeslc.total = 16;
+            optimus->paccels[i].timeslc.occupied = 0;
+            optimus->paccels[i].timeslc.policy =
                     PACCEL_TS_POLICY_FAIR_NOTIFY;
-            INIT_LIST_HEAD(&fisor->paccels[i].timeslc.children);
-            fisor->paccels[i].timeslc.curr = NULL;
-            fisor->paccels[i].ops = &paccel_time_slicing_ops;
-            if (fisor->paccels[i].timeslc.policy ==
+            INIT_LIST_HEAD(&optimus->paccels[i].timeslc.children);
+            optimus->paccels[i].timeslc.curr = NULL;
+            optimus->paccels[i].ops = &paccel_time_slicing_ops;
+            if (optimus->paccels[i].timeslc.policy ==
                     PACCEL_TS_POLICY_FAIR_NOTIFY) {
-                fisor->paccels[i].timeslc.state_sz =
-                        readq(&fisor->pafu_mmio[0x1000*(i+1) + FISOR_STATE_SZ]);
+                optimus->paccels[i].timeslc.state_sz =
+                        readq(&optimus->pafu_mmio[0x1000*(i+1) + OPTIMUS_STATE_SZ]);
             }
         }
 
-        mutex_init(&fisor->paccels[i].ops_lock);
+        mutex_init(&optimus->paccels[i].ops_lock);
     }
 
     return 0;
 }
 
-static int fisor_iommu_init(struct fisor *fisor,
+static int optimus_iommu_init(struct optimus *optimus,
             struct platform_device *pdev)
 {
 
-    fisor->domain = iommu_domain_alloc(&pci_bus_type);
-    if (!fisor->domain) {
-        fisor_info("failed to alloc iommu_domain\n");
+    optimus->domain = iommu_domain_alloc(&pci_bus_type);
+    if (!optimus->domain) {
+        optimus_info("failed to alloc iommu_domain\n");
         return -1;
     }
 
-    fisor->iommu_map_flags = IOMMU_READ | IOMMU_WRITE;
+    optimus->iommu_map_flags = IOMMU_READ | IOMMU_WRITE;
     if (iommu_capable(&pci_bus_type, IOMMU_CAP_CACHE_COHERENCY)) {
-        fisor->iommu_map_flags |= IOMMU_CACHE;
+        optimus->iommu_map_flags |= IOMMU_CACHE;
     }
     else {
-        fisor_info("no iommu cache choerency support\n");
+        optimus_info("no iommu cache choerency support\n");
     }
 
-    if (iommu_attach_device(fisor->domain,
+    if (iommu_attach_device(optimus->domain,
                     pdev->dev.parent->parent)) {
-        fisor_info("attach devcice failed\n");
+        optimus_info("attach devcice failed\n");
         return -1;
     }
     else {
-        fisor_info("attach device success\n");
+        optimus_info("attach device success\n");
     }
 
-    iommu_set_fault_handler(fisor->domain,
-            fisor_iommu_fault_handler, NULL);
+    iommu_set_fault_handler(optimus->domain,
+            optimus_iommu_fault_handler, NULL);
 
     return 0;
 }
 
-static int fisor_iommu_uinit(struct fisor *fisor,
+static int optimus_iommu_uinit(struct optimus *optimus,
                 struct platform_device *pdev)
 {
-    if (fisor->domain) {
-        iommu_detach_device(fisor->domain, pdev->dev.parent->parent);
-        iommu_domain_free(fisor->domain);
-        fisor->domain = NULL;
+    if (optimus->domain) {
+        iommu_detach_device(optimus->domain, pdev->dev.parent->parent);
+        iommu_domain_free(optimus->domain);
+        optimus->domain = NULL;
     }
     return 0;
 }
@@ -1078,7 +1078,7 @@ static int fisor_iommu_uinit(struct fisor *fisor,
 int fpga_register_afu_mdev_device(struct platform_device *pdev)
 {
     int ret;
-    char buf[FISOR_STRING_LEN];
+    char buf[OPTIMUS_STRING_LEN];
     struct mdev_parent_ops *fops;
     struct device *pafu = &pdev->dev;
     struct feature_platform_data *pdata = dev_get_platdata(pafu);
@@ -1086,11 +1086,11 @@ int fpga_register_afu_mdev_device(struct platform_device *pdev)
             get_feature_ioaddr_by_index(pafu, PORT_FEATURE_ID_UAFU);
     struct feature_afu_header *afu_hdr =
             (struct feature_afu_header *)(hdr + 1);
-    struct fisor *fisor;
+    struct optimus *optimus;
     u32 ndirect, nts;
     u64 guidl, guidh;
 
-    printk("fisor: registering, fisor_dbg=%d, tlb_opt_offset=%#llx\n", fisor_dbg, tlb_opt_offset);
+    printk("optimus: registering, optimus_dbg=%d, tlb_opt_offset=%#llx\n", optimus_dbg, tlb_opt_offset);
 
     mutex_lock(&pdata->lock);
 	if (pdata->disable_count) {
@@ -1102,41 +1102,41 @@ int fpga_register_afu_mdev_device(struct platform_device *pdev)
 	mutex_unlock(&pdata->lock);
 
 	scnprintf(buf, PAGE_SIZE, "%016llx%016llx", guidh, guidl);
-    fisor_info("%s: phy afu id %s\n", __func__, buf);
+    optimus_info("%s: phy afu id %s\n", __func__, buf);
 
-    if (guidh != FISOR_GUID_HI ||
-            guidl != FISOR_GUID_LO) {
-        fisor_info("not fisor hardware\n");
+    if (guidh != OPTIMUS_GUID_HI ||
+            guidl != OPTIMUS_GUID_LO) {
+        optimus_info("not optimus hardware\n");
         return -EINVAL;
     }
 
-    fisor = kzalloc(sizeof(struct fisor), GFP_KERNEL);
-    fisor->pafu_device = pafu;
-    fisor->pafu_mmio = (u8 *)hdr;
-    mutex_init(&fisor->ops_lock);
-    INIT_LIST_HEAD(&fisor->vaccel_list);
-    atomic_set(&fisor->next_seq_id, 0);
+    optimus = kzalloc(sizeof(struct optimus), GFP_KERNEL);
+    optimus->pafu_device = pafu;
+    optimus->pafu_mmio = (u8 *)hdr;
+    mutex_init(&optimus->ops_lock);
+    INIT_LIST_HEAD(&optimus->vaccel_list);
+    atomic_set(&optimus->next_seq_id, 0);
     #ifdef SCHED_ENABLE_WEIGHT
-    fisor->weights = 0;
+    optimus->weights = 0;
     #endif
     
-    fisor_probe(fisor, &ndirect, &nts);
-    fisor_iommu_init(fisor, pdev);
+    optimus_probe(optimus, &ndirect, &nts);
+    optimus_iommu_init(optimus, pdev);
 
-    mutex_lock(&fisor_list_lock);
-    list_add(&fisor->next, &fisor_list);
-    mutex_unlock(&fisor_list_lock);
+    mutex_lock(&optimus_list_lock);
+    list_add(&optimus->next, &optimus_list);
+    mutex_unlock(&optimus_list_lock);
 
     /* Start scheduler kthread */
     if (nts != 0) {
-        fisor->scheduler =
-            kthread_run(kthread_watch_time, fisor, "fisor-sched");
-        fisor->user_check_signal = 0;
+        optimus->scheduler =
+            kthread_run(kthread_watch_time, optimus, "optimus-sched");
+        optimus->user_check_signal = 0;
     }
     else
-        fisor->scheduler = NULL;
+        optimus->scheduler = NULL;
 
-    fops = fisor_mdev_get_fops(ndirect, nts);
+    fops = optimus_mdev_get_fops(ndirect, nts);
     if (fops == NULL)
         return -1;
     ret = mdev_register_device(&pdev->dev, fops);
@@ -1148,27 +1148,27 @@ int fpga_register_afu_mdev_device(struct platform_device *pdev)
 
 void fpga_unregister_afu_mdev_device(struct platform_device *pdev)
 {
-    struct fisor *d, *tmp_d;
-    struct fisor *fisor = pdev_to_fisor(pdev);
+    struct optimus *d, *tmp_d;
+    struct optimus *optimus = pdev_to_optimus(pdev);
 
-    if (!fisor)
+    if (!optimus)
         return;
 
-    if (fisor->scheduler) {
-        kthread_stop(fisor->scheduler);
-        fisor->scheduler = NULL;
+    if (optimus->scheduler) {
+        kthread_stop(optimus->scheduler);
+        optimus->scheduler = NULL;
     }
 
-    fisor_iommu_uinit(fisor, pdev);
+    optimus_iommu_uinit(optimus, pdev);
 
 	mdev_unregister_device(&pdev->dev);
 
-    mutex_lock(&fisor_list_lock);
-    list_for_each_entry_safe(d, tmp_d, &fisor_list, next) {
-        if (fisor == d) {
-            list_del(&fisor->next);
+    mutex_lock(&optimus_list_lock);
+    list_for_each_entry_safe(d, tmp_d, &optimus_list, next) {
+        if (optimus == d) {
+            list_del(&optimus->next);
             break;
         }
     }
-    mutex_unlock(&fisor_list_lock);
+    mutex_unlock(&optimus_list_lock);
 }

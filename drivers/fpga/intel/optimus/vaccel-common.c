@@ -1,5 +1,5 @@
 #include "afu.h"
-#include "fisor.h"
+#include "optimus.h"
 
 static u64 vaccel_kvm_host_page_size(struct kvm *kvm, gfn_t gfn)
 {
@@ -31,22 +31,22 @@ int vaccel_iommu_page_map(struct vaccel *vaccel,
     struct kvm *kvm = vaccel->kvm;
     gfn_t gfn = gpa >> PAGE_SHIFT;
     kvm_pfn_t pfn, old_pfn;
-    struct iommu_domain *domain = vaccel->fisor->domain;
-    int flags = vaccel->fisor->iommu_map_flags;
+    struct iommu_domain *domain = vaccel->optimus->domain;
+    int flags = vaccel->optimus->iommu_map_flags;
     u64 host_pgsize = vaccel_kvm_host_page_size(kvm, gfn);
 
-    // fisor_info("%s: iommu map gva %llx to gpa %llx pgsize %llx\n",
+    // optimus_info("%s: iommu map gva %llx to gpa %llx pgsize %llx\n",
     //                __func__, gva, gpa, pgsize);
 
     if (host_pgsize < pgsize) {
         u64 off, ret;
 
-        fisor_info("%s: host page size less than guest page size", __func__);
+        optimus_info("%s: host page size less than guest page size", __func__);
         for (off = 0; off < pgsize; off += PAGE_SIZE) {
             ret = vaccel_iommu_page_map(vaccel, gpa + off, gva + off, PAGE_SIZE);
 
             if (ret) {
-                fisor_err("%s: map failed", __func__);
+                optimus_err("%s: map failed", __func__);
                 break;
             }
         }
@@ -54,7 +54,7 @@ int vaccel_iommu_page_map(struct vaccel *vaccel,
     }
 
     pfn = gfn_to_pfn(kvm, gfn);
-    // fisor_info("%s: iommu map gva %llx to gpa %llx\n", __func__, gva, gpa);
+    // optimus_info("%s: iommu map gva %llx to gpa %llx\n", __func__, gva, gpa);
 
     /* add to IOMMU */
     if (!IS_ALIGNED((unsigned long)(gva), pgsize)) {
@@ -82,7 +82,7 @@ int vaccel_iommu_page_map(struct vaccel *vaccel,
 
     // vaccel_info(vaccel, "iommu_map %llx ==> %llx ==> %llx\n", gva, gpa, pfn << PAGE_SHIFT);
 
-    return iommu_map(vaccel->fisor->domain, gva,
+    return iommu_map(vaccel->optimus->domain, gva,
                         pfn << PAGE_SHIFT, pgsize, flags);
 }
 
@@ -90,7 +90,7 @@ void vaccel_iommu_page_unmap(struct vaccel *vaccel, u64 gva, u64 pgsize)
 {
     kvm_pfn_t pfn;
     int r;
-    struct iommu_domain *domain = vaccel->fisor->domain;
+    struct iommu_domain *domain = vaccel->optimus->domain;
 
     if (!IS_ALIGNED((unsigned long)(gva), pgsize)) {
         vaccel_info(vaccel, "%s: err gva not aligned\n", __func__);
@@ -145,7 +145,7 @@ void vaccel_create_config_space(struct vaccel *vaccel)
 
     /* BAR 0 */
     STORE_LE32((u32 *) &vaccel->vconfig[0x10], 
-                FISOR_BAR_0_MASK |
+                OPTIMUS_BAR_0_MASK |
                 PCI_BASE_ADDRESS_SPACE_MEMORY |
                 PCI_BASE_ADDRESS_MEM_TYPE_64);
 
@@ -154,7 +154,7 @@ void vaccel_create_config_space(struct vaccel *vaccel)
 
     /* BAR 2 */
     STORE_LE32((u32 *) &vaccel->vconfig[0x18],
-                FISOR_BAR_2_MASK |
+                OPTIMUS_BAR_2_MASK |
                 PCI_BASE_ADDRESS_SPACE_MEMORY |
                 PCI_BASE_ADDRESS_MEM_TYPE_64);
 
@@ -356,24 +356,24 @@ int vaccel_group_notifier(struct notifier_block *nb,
 void do_paccel_soft_reset(struct paccel *paccel, bool lock)
 {
     u64 reset_flags, new_reset_flags;
-    struct fisor *fisor;
+    struct optimus *optimus;
 
-    WARN_ON(paccel->fisor == NULL);
+    WARN_ON(paccel->optimus == NULL);
 
-    fisor = paccel->fisor;
+    optimus = paccel->optimus;
 
     if (lock) {
-        mutex_lock(&fisor->ops_lock);
+        mutex_lock(&optimus->ops_lock);
     }
 
-    reset_flags = readq(&fisor->pafu_mmio[0x18]);
+    reset_flags = readq(&optimus->pafu_mmio[0x18]);
     new_reset_flags = reset_flags |
             (1 << paccel->accel_id);
-    writeq(new_reset_flags, &fisor->pafu_mmio[0x18]);
-    writeq(reset_flags, &fisor->pafu_mmio[0x18]);
+    writeq(new_reset_flags, &optimus->pafu_mmio[0x18]);
+    writeq(reset_flags, &optimus->pafu_mmio[0x18]);
 
     if (lock) {
-        mutex_unlock(&fisor->ops_lock);
+        mutex_unlock(&optimus->ops_lock);
     }
 }   
 
@@ -382,7 +382,7 @@ void do_vaccel_bar_cleanup(struct vaccel *vaccel)
     WARN_ON(vaccel == NULL);
     WARN_ON(vaccel->bar == NULL);
 
-    memset(vaccel->bar[VACCEL_BAR_0], 0, FISOR_BAR_0_SIZE);
-    memset(vaccel->bar[VACCEL_BAR_2], 0, FISOR_BAR_2_SIZE);
+    memset(vaccel->bar[VACCEL_BAR_0], 0, OPTIMUS_BAR_0_SIZE);
+    memset(vaccel->bar[VACCEL_BAR_2], 0, OPTIMUS_BAR_2_SIZE);
 }
 

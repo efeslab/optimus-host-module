@@ -34,11 +34,11 @@ intel-fpga-afu-y += drivers/fpga/intel/region.o
 intel-fpga-afu-y += drivers/fpga/intel/dma-region.o
 intel-fpga-afu-y += drivers/fpga/intel/afu-error.o
 intel-fpga-afu-y += drivers/fpga/intel/afu-check.o
-intel-fpga-afu-y += drivers/fpga/intel/fisor/fisor.o
-intel-fpga-afu-y += drivers/fpga/intel/fisor/fisor-common.o
-intel-fpga-afu-y += drivers/fpga/intel/fisor/vaccel-common.o
-intel-fpga-afu-y += drivers/fpga/intel/fisor/vaccel-direct.o
-intel-fpga-afu-y += drivers/fpga/intel/fisor/vaccel-timeslc.o
+intel-fpga-afu-y += drivers/fpga/intel/optimus/optimus.o
+intel-fpga-afu-y += drivers/fpga/intel/optimus/optimus-common.o
+intel-fpga-afu-y += drivers/fpga/intel/optimus/vaccel-common.o
+intel-fpga-afu-y += drivers/fpga/intel/optimus/vaccel-direct.o
+intel-fpga-afu-y += drivers/fpga/intel/optimus/vaccel-timeslc.o
 
 all:
 	$(MAKE) -C $(KERNELDIR) M=$(PWD) modules

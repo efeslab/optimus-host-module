@@ -1,5 +1,5 @@
 #include "afu.h"
-#include "fisor.h"
+#include "optimus.h"
 
 static int paccel_timeslc_dump(struct paccel *paccel)
 {
@@ -9,7 +9,7 @@ static int paccel_timeslc_dump(struct paccel *paccel)
     u32 avail_inst = paccel->timeslc.total;
     u32 curr_inst = paccel->timeslc.occupied;
 
-    paccel_info(paccel, "fisor: phys accelerator #%d, mmio %x, mmio_size %x, avail %d, curr %d\n",
+    paccel_info(paccel, "optimus: phys accelerator #%d, mmio %x, mmio_size %x, avail %d, curr %d\n",
                 accel_id, mmio_start, mmio_size, avail_inst, curr_inst);
 
     return 0;
@@ -19,13 +19,13 @@ static int paccel_timeslc_dump(struct paccel *paccel)
 static int vaccel_time_slicing_init(struct vaccel *vaccel,
                 struct paccel *paccel, struct mdev_device *mdev)
 {
-    struct fisor *fisor;
+    struct optimus *optimus;
 
     if (!mdev || !vaccel || !paccel)
         return -EINVAL;
 
-    fisor = paccel->fisor;
-    if (!fisor)
+    optimus = paccel->optimus;
+    if (!optimus)
         return -EINVAL;
 
     if (paccel->mode != VACCEL_TYPE_TIME_SLICING) {
@@ -40,10 +40,10 @@ static int vaccel_time_slicing_init(struct vaccel *vaccel,
 
     vaccel->mode = VACCEL_TYPE_TIME_SLICING;
     vaccel->paccel = paccel;
-    vaccel->fisor = fisor;
+    vaccel->optimus = optimus;
     vaccel->gva_start = 0;
     vaccel->mdev = mdev;
-    vaccel->seq_id = atomic_fetch_add(1, &fisor->next_seq_id);
+    vaccel->seq_id = atomic_fetch_add(1, &optimus->next_seq_id);
     vaccel->iova_start = vaccel->seq_id * SIZE_64G;
     vaccel->ops = &vaccel_time_slicing_ops;
     vaccel->paging_notifier_gpa = 0;
@@ -62,7 +62,7 @@ static int vaccel_time_slicing_init(struct vaccel *vaccel,
     mutex_init(&vaccel->ops_lock);
 
     /* create pcie config space */
-    vaccel->vconfig = kzalloc(FISOR_CONFIG_SPACE_SIZE, GFP_KERNEL);
+    vaccel->vconfig = kzalloc(OPTIMUS_CONFIG_SPACE_SIZE, GFP_KERNEL);
     if (!vaccel->vconfig) {
         kfree(vaccel);
         return -ENOMEM;
@@ -70,8 +70,8 @@ static int vaccel_time_slicing_init(struct vaccel *vaccel,
     vaccel_create_config_space(vaccel);
 
     /* allocate bar */
-    vaccel->bar[VACCEL_BAR_0] = kzalloc(FISOR_BAR_0_SIZE, GFP_KERNEL);
-    vaccel->bar[VACCEL_BAR_2] = kzalloc(FISOR_BAR_2_SIZE, GFP_KERNEL);
+    vaccel->bar[VACCEL_BAR_0] = kzalloc(OPTIMUS_BAR_0_SIZE, GFP_KERNEL);
+    vaccel->bar[VACCEL_BAR_2] = kzalloc(OPTIMUS_BAR_2_SIZE, GFP_KERNEL);
 
     /* register to mdev */
     mdev_set_drvdata(mdev, vaccel);
@@ -129,20 +129,20 @@ static int vaccel_time_slicing_uinit(struct vaccel *vaccel)
     return 0;
 }
 
-static bool fisor_hw_check_idle(struct paccel *paccel)
+static bool optimus_hw_check_idle(struct paccel *paccel)
 {
     u8 *mmio_base;
     u64 data64;
-    struct fisor *fisor;
+    struct optimus *optimus;
 
     WARN_ON(paccel == NULL);
-    WARN_ON(paccel->fisor == NULL);
+    WARN_ON(paccel->optimus == NULL);
 
-    fisor = paccel->fisor;
-    mmio_base = fisor->pafu_mmio + paccel->mmio_start;
-    data64 = readq(&mmio_base[FISOR_TRANS_CTL]);
+    optimus = paccel->optimus;
+    mmio_base = optimus->pafu_mmio + paccel->mmio_start;
+    data64 = readq(&mmio_base[OPTIMUS_TRANS_CTL]);
 
-    if (data64 != FISOR_TRANS_CTL_BUSY)
+    if (data64 != OPTIMUS_TRANS_CTL_BUSY)
         return true;
     else
         return false;
@@ -150,16 +150,16 @@ static bool fisor_hw_check_idle(struct paccel *paccel)
 
 static int vaccel_time_slicing_submit(struct vaccel *vaccel)
 {
-    struct fisor *fisor = vaccel->fisor;
+    struct optimus *optimus = vaccel->optimus;
     struct paccel *paccel = vaccel->paccel;
-    u8 *mmio_base = fisor->pafu_mmio + paccel->mmio_start;
+    u8 *mmio_base = optimus->pafu_mmio + paccel->mmio_start;
     u64 mux_offset = vaccel->iova_start/CL(1) - vaccel->gva_start/CL(1);
     u64 vm_cfg_offset = vaccel->paccel->accel_id * 8 + 0x30;
     int idx;
     u64 data64;
 
     /* configure the accelerator with new address */
-    writeq(mux_offset, &fisor->pafu_mmio[vm_cfg_offset]);
+    writeq(mux_offset, &optimus->pafu_mmio[vm_cfg_offset]);
 
     /* reset the accelerator */
     do_paccel_soft_reset(paccel, false);
@@ -175,10 +175,10 @@ static int vaccel_time_slicing_submit(struct vaccel *vaccel)
     }
 
     /* write transaction begin or continue */
-    data64 = *(u64*)(vaccel->bar[VACCEL_BAR_0] + FISOR_TRANS_CTL);
+    data64 = *(u64*)(vaccel->bar[VACCEL_BAR_0] + OPTIMUS_TRANS_CTL);
     paccel_info(paccel, "%s: write %llu to transaction control\n",
             __func__, data64);
-    writeq(data64, &mmio_base[FISOR_TRANS_CTL]);
+    writeq(data64, &mmio_base[OPTIMUS_TRANS_CTL]);
 
     // /* cleanup the bar after transaction */
     // do_vaccel_bar_cleanup(vaccel);
@@ -187,8 +187,8 @@ static int vaccel_time_slicing_submit(struct vaccel *vaccel)
 }
 
 static int do_paccel_pause(struct paccel *paccel) {
-    struct fisor *fisor = paccel->fisor;
-    u8 *mmio_base = fisor->pafu_mmio + paccel->mmio_start;
+    struct optimus *optimus = paccel->optimus;
+    u8 *mmio_base = optimus->pafu_mmio + paccel->mmio_start;
     u64 data64;
     u64 start;
 
@@ -197,20 +197,20 @@ static int do_paccel_pause(struct paccel *paccel) {
     clock1 =rdtsc_ordered();
 
     /* Write pause request */
-    writeq(FISOR_TRANS_CTL_REQUEST_PAUSE, &mmio_base[FISOR_TRANS_CTL]);
+    writeq(OPTIMUS_TRANS_CTL_REQUEST_PAUSE, &mmio_base[OPTIMUS_TRANS_CTL]);
 
     start = jiffies;
 
     do {
-        data64 = readq(&mmio_base[FISOR_TRANS_CTL]);
-    } while (data64 != FISOR_TRANS_CTL_PAUSE &&
+        data64 = readq(&mmio_base[OPTIMUS_TRANS_CTL]);
+    } while (data64 != OPTIMUS_TRANS_CTL_PAUSE &&
             jiffies < start + 50 * HZ / 1000);
 
     //clock2 = rdtsc_ordered();
 
     //printk("Clock difference %llu\n", clock2 - clock1);
 
-    if (data64 != FISOR_TRANS_CTL_PAUSE) {
+    if (data64 != OPTIMUS_TRANS_CTL_PAUSE) {
         paccel_err(paccel, "Pause failed: no response (CTL: %llu)\n", data64);
         return -EIO;
     }
@@ -224,46 +224,46 @@ static int do_paccel_pause(struct paccel *paccel) {
 
 static inline void vaccel_record_stop(struct paccel *paccel, struct vaccel *vaccel)
 {
-    fisor_info("kthread: De-schedule vaccel %d on paccel %d \n",
+    optimus_info("kthread: De-schedule vaccel %d on paccel %d \n",
             vaccel->seq_id, paccel->accel_id);
     vaccel->timeslc.start_time = 0;
     vaccel->timeslc.trans_status = VACCEL_TRANSACTION_IDLE;
-    STORE_LE64((u64*)&vaccel->bar[VACCEL_BAR_0][FISOR_TRANS_CTL],
-            FISOR_TRANS_CTL_FINISH);
+    STORE_LE64((u64*)&vaccel->bar[VACCEL_BAR_0][OPTIMUS_TRANS_CTL],
+            OPTIMUS_TRANS_CTL_FINISH);
     paccel->timeslc.curr = NULL;
 }
 
 static inline void vaccel_record_run(struct paccel *paccel, struct vaccel *vaccel)
 {
-    fisor_info("kthread: Schedule vaccel %d on paccel %d \n",
+    optimus_info("kthread: Schedule vaccel %d on paccel %d \n",
             vaccel->seq_id, paccel->accel_id);
     vaccel_time_slicing_submit(vaccel);
     vaccel->timeslc.start_time = jiffies;
     vaccel->timeslc.trans_status = VACCEL_TRANSACTION_HARDWARE;
-    STORE_LE64((u64*)&vaccel->bar[VACCEL_BAR_0][FISOR_TRANS_CTL],
-            FISOR_TRANS_CTL_BUSY);
+    STORE_LE64((u64*)&vaccel->bar[VACCEL_BAR_0][OPTIMUS_TRANS_CTL],
+            OPTIMUS_TRANS_CTL_BUSY);
     paccel->timeslc.curr = vaccel;
 }
 
 static inline void vaccel_record_abort(struct paccel *paccel, struct vaccel *vaccel)
 {
-    fisor_info("kthread: Abort vaccel %d on paccel %d \n",
+    optimus_info("kthread: Abort vaccel %d on paccel %d \n",
             vaccel->seq_id, paccel->accel_id);
     vaccel->timeslc.start_time = 0;
     vaccel->timeslc.trans_status = VACCEL_TRANSACTION_IDLE;
-    STORE_LE64((u64*)&vaccel->bar[VACCEL_BAR_0][FISOR_TRANS_CTL],
-            FISOR_TRANS_CTL_ABORT);
+    STORE_LE64((u64*)&vaccel->bar[VACCEL_BAR_0][OPTIMUS_TRANS_CTL],
+            OPTIMUS_TRANS_CTL_ABORT);
     paccel->timeslc.curr = NULL;
 }
 
 static inline void vaccel_record_pause(struct paccel *paccel, struct vaccel *vaccel)
 {
-    fisor_info("kthread: Pause vaccel %d on paccel %d \n",
+    optimus_info("kthread: Pause vaccel %d on paccel %d \n",
             vaccel->seq_id, paccel->accel_id);
     vaccel->timeslc.start_time = 0;
     vaccel->timeslc.trans_status = VACCEL_TRANSACTION_STARTED;
-    STORE_LE64((u64*)&vaccel->bar[VACCEL_BAR_0][FISOR_TRANS_CTL],
-            FISOR_TRANS_CTL_CONT);
+    STORE_LE64((u64*)&vaccel->bar[VACCEL_BAR_0][OPTIMUS_TRANS_CTL],
+            OPTIMUS_TRANS_CTL_CONT);
     paccel->timeslc.curr = NULL;
 }
 
@@ -306,7 +306,7 @@ static void paccel_schedule_round_robin(struct paccel *paccel)
     WARN_ON(paccel == NULL);
 
     if (paccel->mode != VACCEL_TYPE_TIME_SLICING) {
-        fisor_err("%s: paccel %d is in the wrong mode\n",
+        optimus_err("%s: paccel %d is in the wrong mode\n",
                 __func__, paccel->accel_id);
         return;
     }
@@ -328,8 +328,8 @@ static void paccel_schedule_round_robin(struct paccel *paccel)
         }
 
         /* If hw is still busy, continue (unlock in caller)*/
-        if (!fisor_hw_check_idle(paccel)) {
-            fisor_info("kthread: vaccel %d still runs on paccel %d \n",
+        if (!optimus_hw_check_idle(paccel)) {
+            optimus_info("kthread: vaccel %d still runs on paccel %d \n",
                 curr->seq_id, paccel->accel_id);
             return;
         }
@@ -338,7 +338,7 @@ static void paccel_schedule_round_robin(struct paccel *paccel)
                 curr->timeslc.start_time) * 1000 / HZ;
 
         curr->timeslc.running_time += run_duration;
-        fisor_info("kthread: vaccel %d on paccel %d runs for %llu ms \n",
+        optimus_info("kthread: vaccel %d on paccel %d runs for %llu ms \n",
                 curr->seq_id, paccel->accel_id, run_duration);
         vaccel_record_stop(paccel, curr);
         /* maintain linked list order */
@@ -357,7 +357,7 @@ static void paccel_schedule_round_robin(struct paccel *paccel)
         }
     }
 
-    // fisor_info("No job is runnable on paccel %d \n", paccel->accel_id);
+    // optimus_info("No job is runnable on paccel %d \n", paccel->accel_id);
 
 }
 
@@ -369,7 +369,7 @@ static void paccel_schedule_fair_abort(struct paccel *paccel)
     WARN_ON(paccel == NULL);
 
     if (paccel->mode != VACCEL_TYPE_TIME_SLICING) {
-        fisor_err("%s: paccel %d is in the wrong mode\n",
+        optimus_err("%s: paccel %d is in the wrong mode\n",
                 __func__, paccel->accel_id);
         return;
     }
@@ -394,15 +394,15 @@ static void paccel_schedule_fair_abort(struct paccel *paccel)
                 curr->timeslc.start_time) * 1000 / HZ;
 
         /* If hw is still busy, check max running period */
-        if (!fisor_hw_check_idle(paccel)) {
+        if (!optimus_hw_check_idle(paccel)) {
             if (run_duration <= PACCEL_TS_MAX_PERIOD_MS) {
-                fisor_info("kthread: vaccel %d still runs on paccel "
+                optimus_info("kthread: vaccel %d still runs on paccel "
                         "%d, lasts %llu ms \n", curr->seq_id,
                         paccel->accel_id, run_duration);
                 return;
             }
             else {
-                fisor_info("kthread: vaccel %d runs on paccel %d "
+                optimus_info("kthread: vaccel %d runs on paccel %d "
                         "for %llu ms, timeout \n",curr->seq_id,
                         paccel->accel_id, run_duration);
                 vaccel_record_abort(paccel, curr);
@@ -410,7 +410,7 @@ static void paccel_schedule_fair_abort(struct paccel *paccel)
             }
         }
         else {
-            fisor_info("kthread: vaccel %d on paccel %d runs for %llu ms \n",
+            optimus_info("kthread: vaccel %d on paccel %d runs for %llu ms \n",
                     curr->seq_id, paccel->accel_id, run_duration);
             vaccel_record_stop(paccel, curr);
         }
@@ -446,7 +446,7 @@ static void paccel_schedule_fair_abort(struct paccel *paccel)
         }
     }
 
-    // fisor_info("No job is runnable on paccel %d \n", paccel->accel_id);
+    // optimus_info("No job is runnable on paccel %d \n", paccel->accel_id);
 
 }
 
@@ -458,13 +458,13 @@ static void paccel_schedule_fair_notify(struct paccel *paccel)
     WARN_ON(paccel == NULL);
 
     if (paccel->mode != VACCEL_TYPE_TIME_SLICING) {
-        fisor_err("%s: paccel %d is in the wrong mode\n",
+        optimus_err("%s: paccel %d is in the wrong mode\n",
                 __func__, paccel->accel_id);
         return;
     }
 
     if (paccel->timeslc.policy != PACCEL_TS_POLICY_FAIR_NOTIFY) {
-        fisor_err("%s: paccel %d is in the wrong policy\n",
+        optimus_err("%s: paccel %d is in the wrong policy\n",
                 __func__, paccel->accel_id);
         return;
     }
@@ -489,16 +489,16 @@ static void paccel_schedule_fair_notify(struct paccel *paccel)
                 curr->timeslc.start_time) * 1000 / HZ;
 
         /* If hw is still busy, check max running period */
-        if (!fisor_hw_check_idle(paccel)) {
+        if (!optimus_hw_check_idle(paccel)) {
             if (vaccel_should_continue(paccel, curr, run_duration))
             {
-                fisor_info("kthread: vaccel %d still runs on paccel "
+                optimus_info("kthread: vaccel %d still runs on paccel "
                         "%d \n", curr->seq_id, paccel->accel_id);
                 return;
             }
             else
             {
-                fisor_info("kthread: vaccel %d runs on paccel %d "
+                optimus_info("kthread: vaccel %d runs on paccel %d "
                         "for %llu ms, timeout, preempt \n",
                         curr->seq_id, paccel->accel_id, run_duration);
                 vaccel_record_pause(paccel, curr);
@@ -506,7 +506,7 @@ static void paccel_schedule_fair_notify(struct paccel *paccel)
             }
         }
         else {
-            fisor_info("kthread: vaccel %d on paccel %d runs for %llu ms \n",
+            optimus_info("kthread: vaccel %d on paccel %d runs for %llu ms \n",
                     curr->seq_id, paccel->accel_id, run_duration);
             vaccel_record_stop(paccel, curr);
         }
@@ -548,31 +548,31 @@ static void paccel_schedule_fair_notify(struct paccel *paccel)
         }
     }
 
-    // fisor_info("No job is runnable on paccel %d \n", paccel->accel_id);
+    // optimus_info("No job is runnable on paccel %d \n", paccel->accel_id);
 
 }
 
-int kthread_watch_time(void *fisor_param)
+int kthread_watch_time(void *optimus_param)
 {
-    struct fisor *fisor = fisor_param;
-    struct paccel *paccels = fisor->paccels;
-    u32 npaccels = fisor->npaccels;
+    struct optimus *optimus = optimus_param;
+    struct paccel *paccels = optimus->paccels;
+    u32 npaccels = optimus->npaccels;
     int i;
     struct paccel *paccel;
 
-    fisor_info("Time keeping (scheduling) kthread starts \n");
+    optimus_info("Time keeping (scheduling) kthread starts \n");
 
     while (1) {
 
-        // fisor_info("Scheduling kthread wakes up \n");
+        // optimus_info("Scheduling kthread wakes up \n");
 
         if (kthread_should_stop()) {
             break;
         }
 
-        fisor->user_check_signal = 0;
+        optimus->user_check_signal = 0;
 
-        mutex_lock(&fisor->ops_lock);
+        mutex_lock(&optimus->ops_lock);
 
         for (i = 0; i < npaccels; i++) {
 
@@ -602,7 +602,7 @@ int kthread_watch_time(void *fisor_param)
             mutex_unlock(&paccel->ops_lock);
         }
 
-        mutex_unlock(&fisor->ops_lock);
+        mutex_unlock(&optimus->ops_lock);
 
         set_current_state(TASK_INTERRUPTIBLE);
 
@@ -611,16 +611,16 @@ int kthread_watch_time(void *fisor_param)
             break;
         }
 
-        if (fisor->user_check_signal) {
+        if (optimus->user_check_signal) {
             set_current_state(TASK_RUNNING);
             continue;
         }
 
-        // fisor_info("Scheduling kthread sleeps \n");
+        // optimus_info("Scheduling kthread sleeps \n");
         schedule_timeout(100000 * HZ);
     }
 
-    fisor_info("Time keeping (scheduling) kthread exits \n");
+    optimus_info("Time keeping (scheduling) kthread exits \n");
 
     return 0;
 }
@@ -628,7 +628,7 @@ int kthread_watch_time(void *fisor_param)
 static int vaccel_time_slicing_handle_mmio_read(struct vaccel *vaccel,
             u32 index, u32 offset, u64 *val)
 {
-    struct fisor *fisor = vaccel->fisor;
+    struct optimus *optimus = vaccel->optimus;
     struct paccel *paccel = vaccel->paccel;
     u64 data64;
 
@@ -648,24 +648,24 @@ static int vaccel_time_slicing_handle_mmio_read(struct vaccel *vaccel,
             return -EINVAL;
         }
 
-        if (offset == FISOR_STATE_SZ &&
+        if (offset == OPTIMUS_STATE_SZ &&
                 paccel->timeslc.policy == PACCEL_TS_POLICY_FAIR_NOTIFY) {
             vaccel_info(vaccel, "Read the saved state size (in # of pages) \n");
             *val = paccel->timeslc.state_sz;
             return 0;
         }
 
-        if (offset == FISOR_TRANS_CTL) {
+        if (offset == OPTIMUS_TRANS_CTL) {
             vaccel_info(vaccel, "Check hw transaction state \n");
-            fisor->user_check_signal = 1;
-            wake_up_process(fisor->scheduler);
+            optimus->user_check_signal = 1;
+            wake_up_process(optimus->scheduler);
             LOAD_LE64(&vaccel->bar[VACCEL_BAR_0][offset], *val);
             vaccel_info(vaccel, "buffer: %llu\n", *val);
         }
         else if (paccel->timeslc.curr == vaccel &&
                 vaccel->timeslc.trans_status == VACCEL_TRANSACTION_HARDWARE) {
             offset = offset + paccel->mmio_start;
-            data64 = readq(&fisor->pafu_mmio[offset]);
+            data64 = readq(&optimus->pafu_mmio[offset]);
             *val = data64;
             //paccel_info(paccel, "Real MMIO read: offset 0x%x, value %llu\n",
             //        offset - paccel->mmio_start, data64);
@@ -689,7 +689,7 @@ static int vaccel_time_slicing_handle_mmio_read(struct vaccel *vaccel,
 static int vaccel_time_slicing_handle_mmio_write(struct vaccel *vaccel,
             u32 index, u32 offset, u64 val)
 {
-    struct fisor *fisor = vaccel->fisor;
+    struct optimus *optimus = vaccel->optimus;
     struct paccel *paccel = vaccel->paccel;
     int ret;
 
@@ -722,8 +722,8 @@ static int vaccel_time_slicing_handle_mmio_write(struct vaccel *vaccel,
             vaccel->timeslc.trans_status = VACCEL_TRANSACTION_STARTED;
             vaccel_info(vaccel, "Commit transaction, wakeup scheduler\n");
             vaccel_info(vaccel, "buffer: %llu\n", val);
-            fisor->user_check_signal = 1;
-            wake_up_process(fisor->scheduler);
+            optimus->user_check_signal = 1;
+            wake_up_process(optimus->scheduler);
         }
 
     } else if (index == VFIO_PCI_BAR2_REGION_INDEX) {
@@ -768,8 +768,8 @@ static int vaccel_time_slicing_close(struct mdev_device *mdev)
                 &vaccel->group_notifier);
 
     idx = srcu_read_lock(&vaccel->kvm->srcu);
-    iommu_unmap_region(vaccel->fisor->domain,
-                vaccel->fisor->iommu_map_flags,
+    iommu_unmap_region(vaccel->optimus->domain,
+                vaccel->optimus->iommu_map_flags,
                 vaccel->iova_start,
                 SIZE_64G >> PAGE_SHIFT);
     srcu_read_unlock(&vaccel->kvm->srcu, idx);
@@ -784,11 +784,11 @@ static int vaccel_time_slicing_close(struct mdev_device *mdev)
 static int vaccel_time_slicing_soft_reset(struct vaccel *vaccel)
 {
     struct paccel *paccel = vaccel->paccel;
-    struct fisor *fisor = paccel->fisor;
+    struct optimus *optimus = paccel->optimus;
 
     vaccel_info(vaccel, "call %s \n", __func__);
 
-    mutex_lock(&fisor->ops_lock);
+    mutex_lock(&optimus->ops_lock);
     mutex_lock(&paccel->ops_lock);
 
     if (vaccel->timeslc.trans_status ==
@@ -804,7 +804,7 @@ static int vaccel_time_slicing_soft_reset(struct vaccel *vaccel)
     }
 
     mutex_unlock(&paccel->ops_lock);
-    mutex_unlock(&fisor->ops_lock);
+    mutex_unlock(&optimus->ops_lock);
 
     do_vaccel_bar_cleanup(vaccel);
 
