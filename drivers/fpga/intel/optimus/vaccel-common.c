@@ -130,7 +130,7 @@ static bool dummy_page_valid(struct page *dummy)
 {
     if (!dummy)
         return false;
-    if (PageCompound(dummy)) {
+    if (!PageCompound(dummy)) {
         optimus_err("failed to protect iommu region, not compound page\n");
         return false;
     }
@@ -162,7 +162,6 @@ void iommu_protect_range(struct vaccel *vaccel)
     }
 
     if (!dummy_page_valid(vaccel->dummy_page)) {
-        optimus_err("failed protect iommu region, dummy page invalid\n");
         return;
     }
 
