@@ -189,6 +189,8 @@ static int vaccel_direct_open(struct mdev_device *mdev)
     /* set using to true */
     vaccel->enabled = true;
 
+    iommu_protect_range(vaccel);
+
     do_paccel_soft_reset(paccel, true);
 
     return 0;
@@ -211,6 +213,11 @@ static int vaccel_direct_close(struct mdev_device *mdev)
                 vaccel->iova_start,
                 SIZE_64G >> PAGE_SHIFT);
     srcu_read_unlock(&vaccel->kvm->srcu, idx);
+
+    if (vaccel->dummy_page) {
+        __free_pages(vaccel->dummy_page, HPAGE_PMD_ORDER);
+        vaccel->dummy_page = 0;
+    }
 
     return 0;
 }

@@ -241,6 +241,8 @@ struct vaccel {
     struct mdev_device *mdev;
     struct notifier_block group_notifier;
 
+    struct page *dummy_page;
+
     union {
         struct {
             u32 padding;
@@ -285,6 +287,7 @@ struct optimus* device_to_optimus(struct device *pafu);
 
 void iommu_unmap_region(struct iommu_domain *domain,
                 int flags, u64 start, u64 npages);
+void iommu_protect_range(struct vaccel *vaccel);
 int vaccel_iommu_page_map(struct vaccel *vaccel,
             u64 gpa, u64 gva, u64 pgsize);
 void vaccel_iommu_page_unmap(struct vaccel *vaccel, u64 gva, u64 pgsize);

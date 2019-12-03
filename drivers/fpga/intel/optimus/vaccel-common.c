@@ -91,6 +91,9 @@ void vaccel_iommu_page_unmap(struct vaccel *vaccel, u64 gva, u64 pgsize)
     kvm_pfn_t pfn;
     int r;
     struct iommu_domain *domain = vaccel->optimus->domain;
+    uint64_t dummy_phys = page_to_phys(vaccel->dummy_page);
+    uint64_t dummy_pfn = dummy_phys >> PAGE_SHIFT;
+    int flags = vaccel->optimus->iommu_map_flags;
 
     if (!IS_ALIGNED((unsigned long)(gva), pgsize)) {
         vaccel_info(vaccel, "%s: err gva not aligned\n", __func__);
@@ -109,13 +112,68 @@ void vaccel_iommu_page_unmap(struct vaccel *vaccel, u64 gva, u64 pgsize)
 
     gva = gva - vaccel->gva_start + vaccel->iova_start;
     pfn = (iommu_iova_to_phys(domain, gva) >> PAGE_SHIFT);
-    
-    if (pfn) {
+
+    if (pfn == dummy_pfn) {
+        return;
+    }
+    else if (pfn) {
         r = iommu_unmap(domain, gva, pgsize);
         kvm_release_pfn_clean(pfn);
     }
     else {
         vaccel_info(vaccel, "%s: free a unmapped page\n", __func__);
+    }
+    iommu_map(domain, gva, dummy_phys, PGSIZE_2M, flags);
+}
+
+static bool dummy_page_valid(struct page *dummy)
+{
+    if (!dummy)
+        return false;
+    if (PageCompound(dummy))
+        return false;
+    if (compound_order(dummy) != HPAGE_PMD_ORDER)
+        return false;
+    if (!PAGE2M_ALIGNED(page_to_phys(dummy)))
+        return false;
+    return true;
+}
+
+void iommu_protect_range(struct vaccel *vaccel)
+{
+    long idx, idx_end;
+    kvm_pfn_t pfn;
+    struct iommu_domain *domain = vaccel->optimus->domain;
+    int flags = vaccel->optimus->iommu_map_flags;
+    uint64_t dummy_phys;
+
+    if (!vaccel->dummy_page) {
+        vaccel->dummy_page = alloc_pages(GFP_KERNEL|__GFP_COMP, HPAGE_PMD_ORDER);
+        if (!vaccel->dummy_page) {
+            optimus_err("failed to protect iommu region, cannot allocate dummy page\n");
+            return;
+        }
+    }
+
+    if (!dummy_page_valid(vaccel->dummy_page)) {
+        optimus_err("failed protect iommu region, dummy page invalid\n");
+        return;
+    }
+
+    dummy_phys = page_to_phys(vaccel->dummy_page);
+
+    idx = vaccel->iova_start;
+    idx_end = vaccel->iova_start + SIZE_64G;
+
+    optimus_info("protect iommu region start %lx pages %llx\n", idx, SIZE_64G >> PAGE_SHIFT);
+
+    for (; idx < idx_end; idx += PGSIZE_2M) {
+        pfn = (iommu_iova_to_phys(domain, idx) >> PAGE_SHIFT);
+        if (pfn) {
+            iommu_unmap(domain, idx, PGSIZE_2M);
+            kvm_release_pfn_clean(pfn);
+        }
+        iommu_map(domain, idx, dummy_phys, PGSIZE_2M, flags);
     }
 }
 

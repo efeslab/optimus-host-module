@@ -751,6 +751,8 @@ static int vaccel_time_slicing_open(struct mdev_device *mdev)
     /* set using to true, polling uses this information */
     vaccel->enabled = true;
 
+    iommu_protect_range(vaccel);
+
     do_vaccel_bar_cleanup(vaccel);
 
     return 0;
