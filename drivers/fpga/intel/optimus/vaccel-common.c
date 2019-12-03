@@ -130,12 +130,18 @@ static bool dummy_page_valid(struct page *dummy)
 {
     if (!dummy)
         return false;
-    if (PageCompound(dummy))
+    if (PageCompound(dummy)) {
+        optimus_err("failed to protect iommu region, not compound page\n");
         return false;
-    if (compound_order(dummy) != HPAGE_PMD_ORDER)
+    }
+    if (compound_order(dummy) != HPAGE_PMD_ORDER) {
+        optimus_err("failed to protect iommu region, compound_order incorrect\n");
         return false;
-    if (!PAGE2M_ALIGNED(page_to_phys(dummy)))
+    }
+    if (!PAGE2M_ALIGNED(page_to_phys(dummy))) {
+        optimus_err("failed to protect iommu region, dummy page not aligned\n");
         return false;
+    }
     return true;
 }
 
