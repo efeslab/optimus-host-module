@@ -180,6 +180,8 @@ void iommu_protect_range(struct vaccel *vaccel)
         }
         iommu_map(domain, idx, dummy_phys, PGSIZE_2M, flags);
     }
+
+    optimus_info("protect iommu region done\n");
 }
 
 void vaccel_create_config_space(struct vaccel *vaccel)
