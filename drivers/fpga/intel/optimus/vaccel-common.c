@@ -123,6 +123,8 @@ void vaccel_iommu_page_unmap(struct vaccel *vaccel, u64 gva, u64 pgsize)
     else {
         vaccel_info(vaccel, "%s: free a unmapped page\n", __func__);
     }
+
+    get_page(vaccel->dummy_page);
     iommu_map(domain, gva, dummy_phys, PGSIZE_2M, flags);
 }
 
