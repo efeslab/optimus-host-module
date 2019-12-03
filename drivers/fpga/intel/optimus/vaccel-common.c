@@ -178,7 +178,7 @@ void iommu_protect_range(struct vaccel *vaccel)
             iommu_unmap(domain, idx, PGSIZE_2M);
             kvm_release_pfn_clean(pfn);
         }
-        kvm_get_pfn(dummy_phys >> PAGE_SHIFT);
+        get_page(vaccel->dummy_page);
         iommu_map(domain, idx, dummy_phys, PGSIZE_2M, flags);
     }
 
