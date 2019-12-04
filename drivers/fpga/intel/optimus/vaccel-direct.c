@@ -36,13 +36,17 @@ static int vaccel_direct_init(struct vaccel *vaccel,
         return -EINVAL;
     }
 
+#define MAX_ACCEL_ID 16
+
     vaccel->mode = VACCEL_TYPE_DIRECT;
     vaccel->paccel = paccel;
     vaccel->optimus = optimus;
     vaccel->gva_start = 0;
     vaccel->mdev = mdev;
     vaccel->seq_id = atomic_fetch_add(1, &optimus->next_seq_id);
-    vaccel->iova_start = vaccel->seq_id * SIZE_64G + paccel->accel_id * tlb_opt_offset * PAGE_SIZE;
+    vaccel->iova_start =
+        vaccel->seq_id * (SIZE_64G + MAX_ACCEL_ID * tlb_opt_offset * PAGE_SIZE)
+            + paccel->accel_id * tlb_opt_offset * PAGE_SIZE;
     vaccel->ops = &vaccel_direct_ops;
     vaccel->paging_notifier_gpa = 0;
     mutex_init(&vaccel->ops_lock);
