@@ -17,6 +17,7 @@
 #include <asm/pgtable_types.h>
 #include <asm/msr.h>
 #include <linux/hugetlb.h>
+#include <linux/vmalloc.h>
 
 #include "afu.h"
 
@@ -97,7 +98,7 @@ static long afu_dma_pin_pages(struct feature_platform_data *pdata,
 	if (ret)
 		return ret;
 
-	region->pages = kcalloc(npages, sizeof(struct page *), GFP_KERNEL);
+	region->pages = vmalloc(npages * sizeof(struct page *));
 	if (!region->pages) {
 		afu_dma_adjust_locked_vm(dev, npages, false);
 		return -ENOMEM;
@@ -120,7 +121,7 @@ static long afu_dma_pin_pages(struct feature_platform_data *pdata,
 err_put_pages:
 	put_all_pages(region->pages, pinned);
 err:
-	kfree(region->pages);
+	vfree(region->pages);
 	afu_dma_adjust_locked_vm(dev, npages, false);
 	return ret;
 }
@@ -132,7 +133,7 @@ static void afu_dma_unpin_pages(struct feature_platform_data *pdata,
 	struct device *dev = &pdata->dev->dev;
 
 	put_all_pages(region->pages, npages);
-	kfree(region->pages);
+	vfree(region->pages);
 	afu_dma_adjust_locked_vm(dev, npages, false);
 
 	dev_dbg(dev, "%ld pages unpinned\n", npages);
